@@ -1,0 +1,883 @@
+# ABDMCS48SE — Especificación técnica y prompt de desarrollo
+
+> Documento técnico detallado del planteamiento inicial centrado en Mario Bros. La visión actual del proyecto amplía el objetivo a un core headless MCS-48 reutilizable; ver [`README.md`](README.md), [`ROADMAP.md`](ROADMAP.md) y [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Las instrucciones de implementación que contiene son planificación y no autorizan a programar mientras la fase actual siga siendo de análisis.
+
+**ABDMCS48SE** (*A - Bus/Data MCS-48 Sound Engine*) es un instrumento VST3/Standalone experimental basado en la emulación del subsistema de sonido del arcade Nintendo **Mario Bros. (1983)**.
+
+No es un reproductor de samples ni un “soundboard de Mario Bros.”. Es un **sintetizador de eventos, ROM y circuito**: MIDI, automatización, secuenciación y circuit bending controlan el firmware MCS-48, sus latches, su bus de datos y el circuito de salida modelado por MAME.
+
+La primera versión utilizará componentes de MAME como motor de emulación. Una fase final prevista contempla sustituir progresivamente esa dependencia por un motor propio.
+
+---
+
+## 1. Objetivo del producto
+
+Crear un plugin de audio y aplicación standalone con:
+
+- Motor de emulación del subsistema de sonido de Mario Bros.
+- Entrada MIDI y automatización VST3.
+- Matriz de comandos hacia el firmware de sonido.
+- Circuit bending virtual reproducible y automatizable.
+- Interfaz moderna basada en WebView.
+- Arquitectura preparada para migrar de MAME a un core propio.
+
+El resultado debe poder usarse como:
+
+- Módulo de sonido retro fiel.
+- Caja de ritmos / percusión experimental.
+- Generador de efectos y transiciones.
+- Sintetizador glitch basado en ROM.
+- Generador de drones, texturas y material granular.
+
+---
+
+## 2. Principios de diseño
+
+1. **El core es independiente de JUCE.**  
+   El motor debe poder compilarse y probarse sin JUCE, sin GUI y sin DAW.
+
+2. **El core no conoce MIDI ni VST3.**  
+   JUCE traduce MIDI, parámetros y UI en comandos del core.
+
+3. **El hilo de audio nunca toca el sistema de ficheros, la WebView ni la GUI.**  
+   Toda comunicación se realiza mediante colas seguras, snapshots atómicos o buffers circulares.
+
+4. **La emulación debe ser determinista.**  
+   Con la misma ROM, la misma secuencia de comandos y los mismos parámetros, la salida debe ser reproducible.
+
+5. **El circuit bending no debe ser puro caos.**  
+   Cada manipulación debe poder automatizarse, guardarse en presets y controlarse por MIDI.
+
+6. **Las ROMs no se distribuyen con el plugin.**  
+   El usuario proporcionará las ROMs necesarias mediante “Bring Your Own ROM”.
+
+---
+
+## 3. Alcance funcional
+
+### Incluido en v1
+
+- Emulación del subsistema de sonido de Mario Bros.
+- Carga externa de ROMs.
+- Ejecución del firmware MCS-48/M58715.
+- Comunicación mediante latches de comandos.
+- Salida mono hacia JUCE.
+- MIDI para disparar comandos.
+- Parámetros VST3 automatizables.
+- Circuit bending básico.
+- Interfaz WebView.
+- Presets de usuario.
+- Standalone y VST3.
+
+### No incluido en v1
+
+- Emulación de la CPU principal Z80.
+- Emulación de vídeo, sprites o lógica del juego.
+- Soporte para otros arcades basados en MCS-48.
+- Editor visual de ROM.
+- Síntesis granular avanzada.
+- Soporte AU, CLAP o AAX.
+- Emulación propia completa de la CPU.
+
+---
+
+## 4. Arquitectura general
+
+```text
+MIDI / GUI / DAW
+       │
+       ▼
+JUCE AudioProcessor
+       │
+       ├── Parámetros VST3
+       ├── Traductor MIDI → comandos
+       ├── Cola de eventos segura
+       ▼
+ABDMCS48SE Core
+       │
+       ├── Sound Board: latches, ROM, I/O
+       ├── MCS-48 / M58715 CPU
+       ├── Timers / interrupciones necesarias
+       ├── DAC / netlist / circuito de salida
+       ▼
+Buffer circular de audio
+       │
+       ▼
+JUCE processBlock → DAW
+```
+
+### Regla crítica
+
+El hilo de audio no ejecuta directamente la WebView ni lee ficheros. El flujo correcto es:
+
+```text
+GUI / MIDI → Message Thread → CommandQueue → Audio Thread → Core
+Core → SampleRingBuffer → Audio Thread → DAW
+```
+
+---
+
+## 5. Estructura de carpetas propuesta
+
+```text
+/ABDMCS48SE/
+├── CMakeLists.txt
+├── README.md
+├── LICENSES.md
+├── /docs/
+│   ├── ARCHITECTURE.md
+│   ├── MAME_INTEGRATION.md
+│   ├── ROM_FORMAT.md
+│   ├── PARAMETERS.md
+│   ├── CIRCUIT_BENDING.md
+│   └── MAME_TO_NATIVE_MIGRATION.md
+├── /source/
+│   ├── /core/
+│   │   ├── ABDMCS48SECore.h
+│   │   ├── ABDMCS48SECore.cpp
+│   │   ├── ISoundEngine.h
+│   │   ├── MameSoundEngine.h
+│   │   ├── MameSoundEngine.cpp
+│   │   ├── CommandQueue.h
+│   │   ├── SampleRingBuffer.h
+│   │   ├── RomLoader.h
+│   │   ├── RomLoader.cpp
+│   │   └── CoreTypes.h
+│   ├── /plugin/
+│   │   ├── PluginProcessor.h
+│   │   ├── PluginProcessor.cpp
+│   │   ├── PluginEditor.h
+│   │   ├── PluginEditor.cpp
+│   │   ├── Parameters.h
+│   │   ├── Parameters.cpp
+│   │   ├── MidiCommandMapper.h
+│   │   ├── MidiCommandMapper.cpp
+│   │   └── WebViewBridge.h
+│   └── /tests/
+│       ├── test_rom_loading.cpp
+│       ├── test_command_queue.cpp
+│       ├── test_audio_render.cpp
+│       └── test_circuit_bending.cpp
+├── /webview/
+│   ├── index.html
+│   ├── app.js
+│   ├── style.css
+│   └── /assets/
+└── /roms/
+    └── README.md
+```
+
+La carpeta `/roms/` solo contendrá documentación y validación de ficheros; nunca ROMs distribuidas.
+
+---
+
+## 6. Motor de emulación: fase MAME
+
+### 6.1 Enfoque
+
+La v1 no debe intentar aislar y reescribir el driver completo de MAME. Debe construir una **capa propia mínima** alrededor de los dispositivos necesarios:
+
+- CPU MCS-48 / M58715.
+- ROM de sonido.
+- Latches de comandos.
+- Recursos de I/O usados por el firmware.
+- DAC / netlist / salida de audio.
+
+El objetivo no es emular Mario Bros. completo, sino emular únicamente su **subsistema de audio**.
+
+### 6.2 Módulo principal
+
+```cpp
+class ISoundEngine
+{
+public:
+    virtual ~ISoundEngine() = default;
+
+    virtual bool loadRoms(const std::vector<RomFile>& roms) = 0;
+    virtual void reset() = 0;
+
+    virtual void writeLatch(uint8_t latchId, uint8_t value) = 0;
+    virtual void writePort(uint8_t portId, uint8_t value) = 0;
+
+    virtual void runUntilSample(uint64_t targetSample) = 0;
+    virtual float readSample() = 0;
+
+    virtual EngineState getState() const = 0;
+};
+```
+
+`MameSoundEngine` será la primera implementación de `ISoundEngine`.
+
+### 6.3 Sincronización temporal
+
+No se ejecuta una instrucción por muestra. El core calcula los ciclos necesarios según el reloj del MCU y el sample rate del DAW:
+
+```cpp
+double cyclesPerSample = cpuClockHz / sampleRate;
+
+cycleAccumulator += cyclesPerSample;
+
+while (cycleAccumulator >= 1.0)
+{
+    engineStep();
+    cycleAccumulator -= 1.0;
+}
+```
+
+El core debe mantener un acumulador fraccional para evitar deriva temporal.
+
+### 6.4 Buffer de audio
+
+El core escribe en un `SampleRingBuffer` monofónico.
+
+- Tamaño mínimo: 4096 muestras.
+- Tamaño recomendado: 8192 o 16384 muestras.
+- Política ante desbordamiento: descartar las muestras más antiguas y registrar un contador de underruns/overruns.
+- El hilo de audio consume el buffer; nunca espera bloqueante.
+
+### 6.5 Carga de ROMs
+
+El plugin permitirá seleccionar una carpeta o ficheros ROM individuales.
+
+Requisitos:
+
+- Validar tamaño y hash SHA-256.
+- No incrustar ROMs en el binario.
+- Guardar la ruta en la configuración del usuario.
+- Mostrar claramente qué ROM falta o no coincide.
+- Permitir recargar sin reiniciar el DAW siempre que sea posible.
+
+---
+
+## 7. Modelo de comandos
+
+El corazón musical de ABDMCS48SE es la **matriz de comandos**.
+
+Cada evento MIDI, paso de secuenciador o acción de GUI puede traducirse en una escritura a un latch o puerto del subsistema de sonido.
+
+### Estructura de comando
+
+```cpp
+struct SoundCommand
+{
+    uint8_t latchId;
+    uint8_t value;
+    uint32_t delaySamples;
+    float probability;
+    LatchMutation mutation;
+    bool repeat;
+    uint32_t repeatIntervalSamples;
+};
+```
+
+### Ejemplos de uso
+
+| Entrada musical | Comando |
+|---|---|
+| Note On C3 | Comando de efecto A |
+| Note On D3 | Comando de efecto B |
+| Note On E3 | Comando de efecto C |
+| Note On con velocity alta | Mismo comando con mutación de latch |
+| CC1 | Corrupción de latch |
+| CC2 | Clock bend |
+| CC4 | Corrupción de bus |
+| CC7 | Volumen de salida |
+| Pitch Bend | Mutación dinámica del valor escrito |
+| Sustain | Repetición o mantenimiento del comando |
+
+La correspondencia exacta comando ↔ efecto se documentará tras analizar el firmware y el driver de MAME. No debe inventarse: se validará con trazas, ROM y escucha comparativa.
+
+---
+
+## 8. Parámetros VST3
+
+### 8.1 Parámetros de motor
+
+| ID | Nombre | Tipo | Rango | Descripción |
+|---|---|---|---|---|
+| `master_gain` | Master Gain | Float | 0.0–2.0 | Ganancia final |
+| `engine_clock` | Engine Clock | Float | 0.25–4.0 | Multiplicador del reloj base |
+| `output_filter` | Output Filter | Float | 0.0–1.0 | Filtro/post-procesado básico |
+| `mono_width` | Mono Width | Float | 0.0–1.0 | Imagen estéreo artificial |
+
+### 8.2 Parámetros de circuit bending
+
+| ID | Nombre | Tipo | Rango | Descripción |
+|---|---|---|---|---|
+| `latch_xor_mask` | Latch XOR Mask | Integer | 0x00–0xFF | Máscara XOR aplicada al valor del latch |
+| `latch_and_mask` | Latch AND Mask | Integer | 0x00–0xFF | Máscara AND aplicada al valor del latch |
+| `bus_xor_mask` | Data Bus XOR Mask | Integer | 0x00–0xFF | Corrupción de datos leídos desde ROM/RAM |
+| `bus_mutation_amount` | Bus Mutation | Float | 0.0–1.0 | Probabilidad de aplicar corrupción |
+| `address_offset` | Address Offset | Integer | -32768–32767 | Desplazamiento de lectura de ROM |
+| `address_xor_mask` | Address XOR Mask | Integer | 0x0000–0xFFFF | Máscara XOR sobre direcciones |
+| `dac_bit_depth` | DAC Bit Depth | Integer | 1–8 | Cuantización de la salida |
+| `dac_bit_crush` | DAC Bit Crush | Float | 0.0–1.0 | Probabilidad/intensidad de corrupción del DAC |
+| `freeze_address` | Freeze Address | Bool | off/on | Mantiene una dirección de lectura |
+| `freeze_value` | Freeze Value | Bool | off/on | Mantiene un valor de bus |
+| `reset_injection` | Reset Injection | Button | — | Reinicio parcial o total del core |
+| `random_seed` | Random Seed | Integer | 0–0xFFFFFFFF | Semilla determinista del caos |
+
+### 8.3 Reglas de seguridad
+
+- `bus_mutation_amount = 0` debe garantizar comportamiento normal.
+- Toda corrupción debe poder desactivarse al instante.
+- Si el firmware entra en estado no útil, el usuario debe poder hacer reset.
+- Los cambios de parámetros se aplican en límites seguros, no necesariamente en mitad de una instrucción.
+- El random debe basarse en un PRNG propio con semilla, no en `rand()`.
+
+---
+
+## 9. Circuit bending virtual
+
+### 9.1 Niveles de manipulación
+
+De menor a mayor riesgo de inestabilidad:
+
+1. **Volumen y filtro de salida**
+2. **DAC bit crush**
+3. **Mutación de latch**
+4. **Clock bend**
+5. **Corrupción de datos**
+6. **Desplazamiento de direcciones**
+7. **Corrupción de opcodes**
+8. **Reset / freeze forzado**
+
+### 9.2 Latch corruption
+
+El valor escrito al latch puede transformarse antes de llegar al firmware:
+
+```cpp
+uint8_t mutateLatch(uint8_t value)
+{
+    value ^= latchXorMask;
+    value &= latchAndMask;
+    return value;
+}
+```
+
+Esto permite convertir un comando en otro, repetir efectos o crear respuestas inesperadas sin corromper el firmware.
+
+### 9.3 Data bus mutation
+
+La corrupción del bus se aplica durante lecturas de datos, no necesariamente durante fetch de instrucciones.
+
+```cpp
+uint8_t readData(uint16_t address)
+{
+    uint8_t value = readMemory(address);
+
+    if (shouldMutate(busMutationAmount))
+        value ^= busXorMask;
+
+    return value;
+}
+```
+
+Debe distinguirse entre:
+
+- Lectura de ROM.
+- Lectura de RAM.
+- Lectura de tablas.
+- Fetch de opcode.
+- Acceso a periféricos.
+
+### 9.4 Address mutation
+
+```cpp
+uint16_t mutateAddress(uint16_t address)
+{
+    return address ^ addressXorMask + addressOffset;
+}
+```
+
+Esta manipulación es potente pero inestable. Debe estar desactivada por defecto.
+
+### 9.5 Clock bend
+
+El clock afecta a:
+
+- Velocidad del firmware.
+- Duración de efectos.
+- Tempo interno de rutinas.
+- Pitch y carácter de los sonidos generados.
+
+Debe aplicarse como multiplicador:
+
+```text
+effectiveClockHz = baseClockHz * engineClock
+```
+
+### 9.6 DAC bit crush
+
+La salida puede cuantizarse:
+
+```cpp
+float applyBitCrush(float sample, int bits)
+{
+    float levels = std::pow(2.0f, bits);
+    return std::round(sample * levels) / levels;
+}
+```
+
+Esto es seguro, musical y muy adecuado como primer efecto de bending.
+
+---
+
+## 10. Interfaz WebView
+
+La interfaz se implementará con `juce::WebBrowserComponent`.
+
+JUCE 8 permite integrar funciones nativas registradas desde C++ con `withNativeFunction` y notificaciones del host al frontend con `emitEventIfBrowserIsVisible` (además de `withNativeIntegrationEnabled`). Las acciones discretas solicitadas por la WebView deben usar funciones nativas; los eventos se reservan para notificar al frontend. `ResourceProvider` se utilizará principalmente para servir recursos y datos binarios, no como puente general de mensajes. [65][68]
+
+### 10.1 Responsabilidades
+
+**WebView:**
+
+- Selección de ROMs.
+- Matriz de comandos.
+- Controles de circuit bending.
+- Visualización de estado del core.
+- Presets.
+- Teclado virtual opcional.
+
+**C++ / JUCE:**
+
+- Parámetros VST3.
+- MIDI.
+- Audio.
+- Carga de ficheros.
+- Persistencia.
+- Ejecución del core.
+
+### 10.2 Contrato mínimo JS ↔ C++
+
+Las operaciones iniciadas por la interfaz se registran en C++ con `withNativeFunction` y se invocan desde JavaScript mediante `getNativeFunction`. El callback nativo valida los argumentos y encola el trabajo correspondiente; nunca debe ejecutar I/O ni trabajo potencialmente bloqueante en el hilo de audio.
+
+Ejemplo ilustrativo de JavaScript → función nativa:
+
+```js
+const setParameter = window.__JUCE__.backend.getNativeFunction("setParameter");
+await setParameter("engine_clock", 1.25);
+
+const sendCommand = window.__JUCE__.backend.getNativeFunction("sendCommand");
+await sendCommand(0, 0x12, 1.0);
+
+const loadRoms = window.__JUCE__.backend.getNativeFunction("loadRoms");
+await loadRoms(); // C++ abre el selector de archivos; la WebView no envía rutas arbitrarias.
+```
+
+Las funciones nativas previstas son `setParameter(id, value)`, `sendCommand(latch, value, probability)`, `loadRoms()` y `resetEngine()`. La selección y lectura de ROMs se realizan en C++ fuera del hilo de audio.
+
+#### C++ → JS
+
+C++ notifica cambios mediante `emitEventIfBrowserIsVisible`; JavaScript se suscribe a esos eventos:
+
+```js
+window.__JUCE__.backend.addEventListener("bd:engineState", (state) => {
+  updateLeds(state);
+});
+
+window.__JUCE__.backend.addEventListener("bd:parameterChanged", (parameter) => {
+  updateControl(parameter.id, parameter.value);
+});
+```
+
+### 10.3 Funciones nativas y eventos recomendados
+
+| Nombre | Dirección | Mecanismo | Uso |
+|---|---|---|---|
+| `setParameter(id, value)` | JS → C++ | Función nativa | Solicitar cambio de parámetro |
+| `sendCommand(latch, value, probability)` | JS → C++ | Función nativa | Encolar un comando |
+| `loadRoms()` | JS → C++ | Función nativa | Abrir el selector de ROMs y validar la selección |
+| `resetEngine()` | JS → C++ | Función nativa | Solicitar reset del core |
+| `bd:engineState` | C++ → JS | Evento | Estado, LEDs y errores |
+| `bd:parameterChanged` | C++ → JS | Evento | Reflejar automatización del DAW |
+| `bd:romStatus` | C++ → JS | Evento | Resultado de validación/carga de ROMs |
+| `bd:diagnostics` | C++ → JS | Evento | Ciclos por muestra, underruns y estado del core |
+
+### 10.4 Propuesta visual inicial
+
+La interfaz se organiza en un encabezado y cuatro paneles funcionales:
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│ HEADER: ROM status / CPU / errors / master gain          │
+├────────────────────────────┬─────────────────────────────┤
+│ COMMAND MATRIX             │ CIRCUIT BEND                │
+│ MIDI note → command        │ Clock / Latch / Bus / Address│
+├────────────────────────────┼─────────────────────────────┤
+│ OUTPUT                     │ DIAGNOSTICS                 │
+│ DAC / bit depth / filter   │ Cycles per sample /         │
+│ Meter / waveform           │ underruns / core status     │
+└────────────────────────────┴─────────────────────────────┘
+```
+
+Estética sugerida:
+
+- Panel técnico tipo instrumento rack.
+- Indicadores visibles para estado de ROM, CPU, errores y ganancia maestra.
+- Matriz MIDI → comando con probabilidad, delay y mutación.
+- Controles de circuit bending para clock, latch, bus y address.
+- Panel de salida con profundidad de bits, filtro, medidor y forma de onda.
+- Diagnóstico de ciclos por muestra, underruns y estado del core.
+- Botón de pánico/reset siempre visible.
+- El secuenciador, si se muestra, será una función secundaria y no sustituirá el panel de diagnóstico en esta vista principal.
+
+---
+
+## 11. MIDI
+
+### 11.1 Entrada MIDI
+
+- Note On / Note Off.
+- Velocity.
+- Pitch Bend.
+- CC.
+- Program Change para presets.
+- Canal MIDI configurable.
+
+### 11.2 Modos de respuesta
+
+| Modo | Comportamiento |
+|---|---|
+| `Single Shot` | Cada Note On dispara un comando |
+| `Retrigger` | Repite el comando mientras la nota esté pulsada |
+| `Latch Hold` | Mantiene el último valor escrito |
+| `Sequence Step` | Avanza un secuenciador interno |
+| `Random Command` | Elige un comando de un conjunto configurado |
+
+### 11.3 Mapeo por defecto
+
+| MIDI | Acción |
+|---|---|
+| C3–B3 | Comandos 1–12 |
+| C4–B4 | Comandos 13–24 |
+| CC1 | Latch XOR |
+| CC2 | Engine Clock |
+| CC4 | Bus Mutation |
+| CC7 | Master Gain |
+| CC11 | DAC Bit Crush |
+| CC64 | Hold / sustain |
+| Pitch Bend | Mutación dinámica del comando |
+
+---
+
+## 12. Persistencia y presets
+
+Un preset debe guardar:
+
+- Rutas de ROM.
+- Estado de la matriz de comandos.
+- Parámetros de bending.
+- Configuración MIDI.
+- Estado del secuenciador.
+- Semilla aleatoria.
+- Ajustes de salida.
+
+Formato recomendado: JSON o XML gestionado por JUCE.
+
+No deben guardarse las ROMs dentro del preset, solo su ruta y hash.
+
+---
+
+## 13. Testing
+
+### Tests obligatorios
+
+1. **Carga de ROM**
+   - Fichero correcto.
+   - Fichero corrupto.
+   - Tamaño incorrecto.
+   - Hash incorrecto.
+
+2. **Cola de comandos**
+   - Escritura desde message thread.
+   - Consumo desde audio thread.
+   - Sin bloqueos.
+   - Sin condiciones de carrera.
+
+3. **Render de audio**
+   - Reset produce silencio o estado conocido.
+   - Un comando produce salida no silenciosa.
+   - El número de muestras generadas es coherente con el tiempo solicitado.
+
+4. **Determinismo**
+   - Misma semilla → misma salida.
+   - Misma secuencia de comandos → misma salida.
+
+5. **Circuit bending**
+   - Parámetros a cero no alteran la salida base.
+   - Reset recupera el motor.
+   - Ninguna corrupción provoca crash, solo glitch o estado no útil.
+
+6. **Rendimiento**
+   - Medir ciclos de CPU emulados por bloque.
+   - Medir tiempo de render por bloque.
+   - Verificar ausencia de allocations en el hilo de audio.
+
+---
+
+## 14. Plan de desarrollo por fases
+
+### Fase 0 — Investigación y validación
+
+**Objetivo:** confirmar qué piezas de MAME se necesitan.
+
+Tareas:
+
+1. Localizar el driver actual de Mario Bros. en MAME.
+2. Identificar la CPU de sonido exacta y su configuración.
+3. Identificar ROMs necesarias.
+4. Documentar latches, puertos, timers e interrupciones.
+5. Identificar el circuito de salida y el DAC/netlist.
+6. Crear `docs/MAME_INTEGRATION.md`.
+7. Crear una lista explícita de ficheros MAME necesarios y sus licencias.
+
+**Entregable:** documento de investigación y lista de dependencias.
+
+---
+
+### Fase 1 — Core headless
+
+**Objetivo:** obtener audio sin JUCE.
+
+Tareas:
+
+1. Crear proyecto CMake independiente.
+2. Implementar `ISoundEngine`.
+3. Implementar `MameSoundEngine`.
+4. Implementar carga de ROMs.
+5. Implementar reloj, acumulador de ciclos y ejecución temporal.
+6. Implementar `SampleRingBuffer`.
+7. Generar WAV desde línea de comandos.
+8. Validar salida con ROM original.
+
+**Criterio de éxito:**  
+Ejecutar un comando conocido y generar un WAV audible y reproducible.
+
+---
+
+### Fase 2 — JUCE mínimo
+
+**Objetivo:** plugin funcional sin GUI web.
+
+Tareas:
+
+1. Crear proyecto JUCE con CMake.
+2. Implementar `PluginProcessor`.
+3. Integrar el core mediante `ISoundEngine`.
+4. Implementar `SampleRingBuffer`.
+5. Implementar `processBlock`.
+6. Añadir parámetros básicos.
+7. Implementar MIDI básico.
+8. Compilar Standalone y VST3.
+
+**Criterio de éxito:**  
+El plugin carga ROMs, recibe MIDI y produce audio en el DAW.
+
+---
+
+### Fase 3 — Matriz de comandos
+
+**Objetivo:** convertir el motor en instrumento.
+
+Tareas:
+
+1. Implementar `SoundCommand`.
+2. Implementar `CommandQueue`.
+3. Implementar `MidiCommandMapper`.
+4. Crear matriz nota → comando.
+5. Añadir velocity, probabilidad y delay.
+6. Añadir repetición y hold.
+7. Documentar comandos descubiertos.
+
+**Criterio de éxito:**  
+El usuario puede asignar comandos a teclas MIDI y tocarlos en tiempo real.
+
+---
+
+### Fase 4 — Circuit bending
+
+**Objetivo:** añadir manipulación estable y automatizable.
+
+Tareas:
+
+1. Implementar latch mutation.
+2. Implementar DAC bit crush.
+3. Implementar clock bend.
+4. Implementar bus mutation.
+5. Implementar address mutation.
+6. Implementar freeze/hold.
+7. Implementar reset injection.
+8. Implementar PRNG determinista.
+9. Crear presets de bending.
+
+**Criterio de éxito:**  
+Todos los efectos son automatizables, reversibles y no provocan crashes.
+
+---
+
+### Fase 5 — WebView
+
+**Objetivo:** integrar la interfaz moderna.
+
+Tareas:
+
+1. Configurar `juce::WebBrowserComponent`.
+2. Definir contrato JSON de eventos.
+3. Implementar funciones nativas.
+4. Implementar envío de estado al frontend.
+5. Servir recursos mediante `ResourceProvider`.
+6. Conectar parámetros VST3 con la UI.
+7. Implementar visualizador de estado.
+
+**Criterio de éxito:**  
+La GUI controla el motor y refleja automatización del DAW en tiempo real.
+
+---
+
+### Fase 6 — Estabilidad y publicación
+
+**Objetivo:** preparar una versión usable.
+
+Tareas:
+
+1. Tests automatizados.
+2. Manejo robusto de errores.
+3. Presets de fábrica.
+4. Documentación de usuario.
+5. Builds Windows/macOS/Linux.
+6. Validación en varios DAWs.
+7. Revisión de licencias.
+8. Empaquetado.
+
+---
+
+## 15. Fase final: migración fuera de MAME
+
+Esta fase **no es obligatoria para la v1**, pero debe condicionar la arquitectura desde el principio.
+
+### 15.1 Objetivo
+
+Sustituir progresivamente la dependencia de MAME por un motor propio:
+
+```text
+v1:  ABDMCS48SE Core → MameSoundEngine
+v2:  ABDMCS48SE Core → NativeMCS48Engine
+v3:  ABDMCS48SE Core → NativeSoundBoard + NativeNetlist
+```
+
+### 15.2 Estrategia de migración
+
+La migración debe hacerse por capas, no de golpe.
+
+| Capa | Sustitución |
+|---|---|
+| 1. Driver / sound board | Implementar mapa propio de ROM, latches e I/O |
+| 2. CPU MCS-48 | Escribir CPU propia compatible con el firmware |
+| 3. Timers / interrupciones | Implementar solo los recursos usados |
+| 4. DAC | Implementar DAC propio |
+| 5. Netlist / circuito analógico | Modelar filtro, ganancia y componentes relevantes |
+| 6. Validación | Comparar salida con la versión MAME |
+
+### 15.3 Requisitos para abandonar MAME
+
+Antes de eliminar MAME debe existir:
+
+1. Desensamblado completo o parcial de la ROM de sonido.
+2. Mapa de memoria documentado.
+3. Lista de opcodes realmente utilizados.
+4. Identificación de rutinas de efectos.
+5. Identificación de tablas de frecuencia, envolventes y ruido.
+6. Registro de accesos a I/O, timers e interrupciones.
+7. Comparación A/B de audio entre motor MAME y motor propio.
+8. Suite de tests con ROMs y secuencias de comandos fijas.
+
+### 15.4 Método de análisis
+
+Se recomienda:
+
+- Usar el depurador/trazas de MAME para registrar PC, accesos a memoria, I/O e interrupciones.
+- Exportar trazas a CSV.
+- Desensamblar la ROM de sonido.
+- Marcar rutinas de efectos.
+- Comparar comandos con efectos audibles.
+- Crear un mapa `command → routine → memory accesses → output`.
+
+### 15.5 Criterio de éxito de la migración
+
+El motor propio se considerará viable cuando:
+
+- Ejecute el firmware sin depender de MAME.
+- Responda a los mismos comandos.
+- Produzca una salida comparable a la de MAME.
+- Pase los tests de regresión.
+- Permita los mismos controles de circuit bending.
+- No requiera código GPL de MAME en el binario final, salvo que el proyecto se distribuya conforme a dicha licencia.
+
+### 15.6 Implicación de licencias
+
+MAME, como proyecto, se distribuye bajo GPL-2.0-or-later, aunque muchos ficheros concretos están bajo BSD-3-Clause; cada fichero debe revisarse individualmente antes de reutilizarlo o redistribuirlo. [64][74]
+
+Por tanto:
+
+- Si ABDMCS48SE enlaza o incluye código GPL de MAME, debe respetar GPL.
+- Si el objetivo final es un plugin propietario o con licencia permisiva, la migración a un core propio es especialmente relevante.
+- Debe mantenerse un fichero `LICENSES.md` con el origen, licencia y hash de cada fichero reutilizado.
+
+---
+
+## 16. Prompt inicial para LLM
+
+> Actúa como ingeniero de audio y emulación especializado en C++, JUCE 8, MAME y microcontroladores MCS-48.  
+>
+> Vamos a desarrollar **ABDMCS48SE**, un plugin VST3/Standalone experimental basado en el subsistema de sonido del arcade Mario Bros. (1983). El motor emulará la CPU de sonido MCS-48/M58715, sus latches de comandos, ROM, recursos de I/O necesarios y el circuito de salida modelado por MAME.  
+>
+> No emules el juego completo: solo el subsistema de audio. La CPU principal Z80 se sustituye por MIDI, automatización y una matriz de comandos.  
+>
+> La primera versión debe reutilizar los componentes necesarios de MAME, pero encapsulados tras una interfaz propia llamada `ISoundEngine`. No copies el driver completo ni dependas del OSD, la GUI, el sistema de ficheros ni el scheduler completo de MAME.  
+>
+> Genera primero, por este orden:  
+> 1. Un documento `MAME_INTEGRATION.md` que identifique los ficheros, dispositivos, ROMs, latches, timers y circuito de sonido necesarios.  
+> 2. El `CMakeLists.txt` para un core headless independiente de JUCE.  
+> 3. La interfaz `ISoundEngine.h`.  
+> 4. El esqueleto de `MameSoundEngine`.  
+> 5. Un `RomLoader` con validación por tamaño y SHA-256.  
+> 6. Un `SampleRingBuffer` thread-safe.  
+> 7. Un ejecutable de consola que cargue ROMs, envíe comandos y exporte WAV.  
+>
+> No implementes todavía la GUI, MIDI ni los parámetros VST3. Primero debe existir un core headless estable, determinista y audible.  
+>
+> Ten en cuenta que la fase final será sustituir MAME por una emulación propia de la CPU MCS-48, del sound board y del circuito de salida. Por tanto, ninguna parte del código de JUCE debe depender directamente de tipos internos de MAME.
+
+---
+
+## 17. Prompt para la siguiente iteración
+
+Cuando la fase 1 esté avanzada, usa este prompt:
+
+> Centrémonos exclusivamente en la integración de ABDMCS48SE con JUCE 8.  
+>
+> Genera un `PluginProcessor` que:  
+> - Instancie `ISoundEngine` mediante una fábrica.  
+> - Cargue ROMs desde una ruta configurable.  
+> - Reciba comandos desde MIDI y una cola thread-safe.  
+> - Ejecute el core por tiempo, no una instrucción por muestra.  
+> - Consuma un `SampleRingBuffer` monofónico.  
+> - Exponga parámetros VST3 para master gain, engine clock, latch XOR, bus mutation y DAC bit depth.  
+>
+> No incluyas WebView todavía. Prioriza thread-safety, determinismo, ausencia de allocations en el hilo de audio y diagnóstico de underruns.
+
+---
+
+## 18. Definición de éxito
+
+ABDMCS48SE v1 se considerará completada cuando:
+
+- Cargue ROMs externas de forma segura.
+- Ejecute el firmware de sonido de Mario Bros.
+- Responda a comandos generados por MIDI y automatización.
+- Produzca audio estable en Standalone y VST3.
+- Permita circuit bending automatizable y reproducible.
+- Tenga una GUI WebView funcional.
+- Se pueda sustituir `MameSoundEngine` por `NativeMCS48Engine` sin reescribir el plugin.

@@ -1,0 +1,77 @@
+# Local Freebuff workspace metadata
+.freebuff/
+
+# Build directories and generated artifacts
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/dist/
+
+# CMake and compiler outputs
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.pch
+*.gch
+
+# IDE and editor state
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+
+# Caches and temporary files
+.cache/
+.cache-*/
+.tmp/
+.tmp-*/
+*.tmp
+*.log
+__pycache__/
+
+# Generated renders and captures; keep authored audio/images eligible for review
+/renders/
+/captures/
+*.webm
+
+# ROM / firmware images: keep binaries out of Git by default.
+# Share only source, metadata and documentation; authorize specific distributable
+# firmware assets explicitly if their license/provenance has been verified.
+*.rom
+*.bin
+*.hex
+*.ihx
+*.eep
+*.dump
+*.chd
+*.zip
+*.7z
+*.rar
