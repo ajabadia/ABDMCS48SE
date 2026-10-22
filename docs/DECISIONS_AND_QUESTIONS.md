@@ -23,6 +23,13 @@ Este registro separa lo expresado explícitamente por el usuario de propuestas o
 
 Estas opciones se reflejan en [ARCHITECTURE.md](ARCHITECTURE.md) y [ROADMAP.md](../ROADMAP.md); no se consideran compromisos irreversibles.
 
+## Información técnica contrastada (fuentes)
+
+- En el MCS-48 clásico el direccionamiento de programa puede abarcar hasta 12 bits/4 KiB, con comportamiento de bancos de 2 KiB; `SEL MB0/MB1` selecciona el banco que se aplica en `JMP`/`CALL`, no una traducción plana de cada lectura. Los detalles de `RET`/`RETR`, interrupciones, ROM interna y fetch externo dependen de la variante; UPI-41/42 no deben darse por equivalentes opcode a opcode. Véase [docs/FIRMWARE_PACKAGE.md](FIRMWARE_PACKAGE.md#nota-de-precisión-memoria-mcs-48-y-bancos) y sus fuentes Intel/MAME.
+- En JSON Schema, `default` es una anotación, no una garantía de insertar valores ausentes. La validación estructural no sustituye comprobaciones semánticas de solapamiento, ruta, banco y perfil.
+- La especialización `std::atomic<std::shared_ptr<T>>` no garantiza lock-free y no resuelve dónde se destruye el objeto retirado. El diseño realtime necesita un protocolo explícito de lifetime/reclamation.
+- No debe suponerse que el host VST3 acepta cambios arbitrarios al conjunto de parámetros durante una instancia activa; IDs y significados automatizables se deberían conservar o validar host por host.
+
 ## Supuestos por validar
 
 - El SDK inicial será una API C++ estándar consumible desde un CLI y desde JUCE.
@@ -30,6 +37,8 @@ Estas opciones se reflejan en [ARCHITECTURE.md](ARCHITECTURE.md) y [ROADMAP.md](
 - El flujo de audio objetivo es por bloques/muestras con temporalidad determinista y presupuestos en tiempo real.
 - ROM e imagen de firmware se compartirán inmutablemente, mientras CPU/RAM/I/O/PRNG/buffers serán privados de cada instancia.
 - JUCE WebView se mantendrá como interfaz inicial aunque otros frontends puedan implementarse después.
+- La carga de un nuevo paquete fallida conservará la máquina actualmente activa; falta confirmar y precisar la experiencia deseada.
+- Se prefiere un esquema host-visible de parámetros VST3 estable entre firmwares, salvo que se acuerde y pruebe una estrategia de migración.
 
 ## Preguntas para siguientes rondas de análisis
 
@@ -52,6 +61,17 @@ Estas opciones se reflejan en [ARCHITECTURE.md](ARCHITECTURE.md) y [ROADMAP.md](
 - ¿Los profiles describirán datos básicos o soportarán lógica de sound board escrita en C++?
 - ¿Querrás permitir perfiles externos de terceros como plugins dinámicos en el futuro, o basta recompilar/adaptar el SDK?
 - ¿Se considera polifonía por instancias, una sola máquina monofónica o las dos como productos/hosts distintos?
+
+### Paquete de firmware y ciclo de vida
+
+- ¿El paquete inicial será carpeta, ZIP u otro contenedor, y qué extensión/ubicación tendrá el manifest?
+- ¿Qué campos deben ser obligatorios desde v1 y cuáles son perfiles de UI opcionales?
+- ¿Qué variantes exactas MCS-48 soportarás primero? ¿Incluimos UPI-41/42 como otra familia con capacidades/opcodes propios o se excluyen?
+- ¿Quieres soportar bancos reales en v1, o un subconjunto inicial explícito sin prometer banking completo?
+- ¿Al fallar el firmware nuevo debemos conservar siempre el activo y el audio, o existe un modo de carga que pare el motor?
+- ¿Qué registros CPU tienen valor de usuario/diagnóstico y cuáles deben quedar solo en modo debug?
+- ¿Los controles de cada firmware deben exponerse como parámetros automatizables VST3, o deben permanecer como UI/preset para mantener estable la lista host-visible?
+- ¿El hot swap puede diferirse hasta disponer de capacidad de retirar la instancia vieja sin interrumpir audio?
 
 ### Plataforma, audio y licencias
 

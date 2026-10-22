@@ -68,10 +68,13 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - [ ] Definir manejo de errores y estados: perfil inválido, ROM ausente/incorrecta, reset, ejecución, underrun/overrun y fallo recuperable.
 - [ ] Definir reglas temporales: sample rate, reloj de CPU, acumulador fraccional, eventos con offset de muestra y comportamiento determinista.
 - [ ] Definir qué significa `runUntilSample`/render y su contrato de tiempo; evitar métodos ambiguos que dependan del estado interno del host.
-- [ ] Definir propiedad y ciclo de vida: ROM inmutable compartible; RAM, CPU, latches, PRNG y buffers privados por instancia.
+- [ ] Definir propiedad y ciclo de vida del paquete: imágenes validadas/inmutables compartibles; RAM, CPU, latches, PRNG y buffers privados por instancia.
+- [ ] Definir estados/transiciones de load, ready, running, fault, unload y swap; decidir si un load fallido conserva la máquina anterior.
+- [ ] Definir activación/reclamación de objetos para hot swap sin destruir la última instancia en audio thread.
 - [ ] Definir gestión de memoria y garantía de no bloquear/no asignar memoria en la ruta de audio.
+- [ ] Definir si los parámetros VST3 permanecen fijos entre perfiles y cómo se preserva automatización al cambiar firmware.
 
-**Criterio de salida:** `docs/ARCHITECTURE.md` y contrato API revisados, con dependencias permitidas/prohibidas y ciclo de vida dibujado.
+**Criterio de salida:** `docs/ARCHITECTURE.md`, `docs/FIRMWARE_PACKAGE.md` y contrato API revisados, con dependencias, ciclo de vida, validación y propiedad/hot-swap documentados; los puntos no resueltos quedan expresamente abiertos.
 
 ## Fase 3 — Prototipo headless y pruebas de referencia
 
@@ -91,7 +94,8 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 
 **Objetivo:** convertir firmware propio en contenido musical y probar la API con más de una máquina.
 
-- [ ] Definir especificación de formato ROM/profile: versión, tamaño, variante de CPU, reloj, mapa de entradas/salidas, metadatos y validación.
+- [ ] Definir especificación del paquete firmware/profile: versión, tamaño, variante/capacidades de CPU, regiones y bancos cuando correspondan, mapa de entradas/salidas, metadatos y validación.
+- [ ] Decidir si el manifiesto es solo validación/metadata o si controla parámetros, automatización y UI; acordar qué es declarativo y qué requiere adaptador compilado.
 - [ ] Definir cómo se documenta el origen, licencia y redistribución de cada firmware.
 - [ ] Diseñar ejemplos musicales de prueba: oscilador por tabla, percusión sintética, secuenciador simple y material propenso a mutación controlable.
 - [ ] Diseñar «ROM Lab» como objetivo futuro: ensamblado/importación, inspección, metadatos y validación, sin editor visual de ROM en v1 salvo decisión expresa.

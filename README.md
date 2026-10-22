@@ -81,6 +81,7 @@ La posible reutilización de componentes de MAME requiere revisar los **archivos
 
 - [Roadmap](ROADMAP.md): fases, hitos, casillas de seguimiento y criterios de salida.
 - [Arquitectura](docs/ARCHITECTURE.md): límites entre core, perfiles, host y frontend.
+- [Paquete de firmware](docs/FIRMWARE_PACKAGE.md): propuesta de manifest, validación, bancos MCS-48 y ciclo de vida/hot swap (aún no normativa).
 - [Decisiones y preguntas abiertas](docs/DECISIONS_AND_QUESTIONS.md): acuerdos, supuestos y temas que iremos resolviendo.
 
 El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia. La fase actual es documentación; la implementación requiere autorización expresa.

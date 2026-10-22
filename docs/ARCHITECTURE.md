@@ -53,14 +53,21 @@ El primer resultado de ingeniería debería poder probarse sin JUCE, DAW ni UI. 
 
 La frontera importante es por responsabilidad y dependencia, no por el nombre de las carpetas. El core nunca conoce JUCE, MIDI, VST3, JSON, JavaScript ni WebView; la WebView nunca llama al core.
 
+## Firmware Package y ciclo de vida
+
+El firmware se considera un paquete validado (manifest + imagen(es) + perfil + metadatos), no una ruta suelta que el core deba interpretar. El loader valida fuera del audio thread; la fábrica construye y mapea una máquina candidata, la inicializa y solo después se puede activar. Un error al cargar un candidato no tiene por qué interrumpir la máquina que ya está activa.
+
+El formato, los estados de carga, las capacidades de bancos y el detalle de hot swap siguen provisionales. El documento [Firmware Package](FIRMWARE_PACKAGE.md) recoge la propuesta, reglas de validación, estados, límites VST3 y fuentes técnicas. Es importante no asumir que `std::atomic<std::shared_ptr<T>>` es automáticamente lock-free o apropiado para destrucción del objeto desde el audio thread.
+
 ## Machine Profile
 
 Un perfil define cómo una máquina concreta usa el core MCS-48. En términos conceptuales puede declarar o conectar:
 
 - ID y versión del perfil.
 - Variante de CPU, reloj y requisitos de memoria.
-- ROMs necesarias: identidad, tamaño, región/offset si aplica y hash esperado cuando exista una referencia legítima.
+- Imágenes necesarias: identidad, tamaño, región/offset/banco si lo soporta la variante y hash esperado cuando exista una referencia legítima.
 - Mapa de memoria, puertos, latches y señales externas.
+- Procedencia, versión y capacidades del firmware/CPU; validar semánticamente además del esquema del manifest.
 - Timers/interrupciones/periféricos requeridos.
 - Ruta de salida de audio: DAC, stream, canales y tratamiento del circuito.
 - Entradas externas con nombre/anchura para que un host las traduzca.
@@ -192,7 +199,10 @@ Los criterios concretos y métricas pendientes están en [ROADMAP.md](../ROADMAP
 - Variante(s) de MCS-48 soportadas inicialmente y pruebas de conformidad disponibles.
 - Semántica exacta de `render`/tiempo, sample-rate conversion y offsets MIDI.
 - Declaración del perfil: JSON/TOML limitado, estructura C++ compilada, o ambos.
-- Requisitos mínimos y formato de manifest de ROM; tamaño, segmentos, hash y procedencia.
+- Requisitos mínimos y formato del paquete de firmware; tamaño, segmentos, hash y procedencia.
 - API fuente estable frente a ABI binaria estable y distribución del SDK.
 - Polifonía y compartición de ROM/buffers.
+- Estrategia segura de activación y reclamación de máquina en hot swap, fuera del audio thread.
+- Política para mantener IDs/significados VST3 estables cuando cambia el firmware.
+- Protocolo probado para publicar snapshots de diagnóstico/registros sin data races.
 - Política de compatibilidad y licensing de MAME, ensambladores y firmware de ejemplo.

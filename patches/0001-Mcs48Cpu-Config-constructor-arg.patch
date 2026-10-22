@@ -1,0 +1,10 @@
+--- a/source/core/Mcs48Cpu.h
++++ b/source/core/Mcs48Cpu.h
+@@ -96,7 +96,7 @@ namespace bdmcs48::core {
+     // Constructor explícito con el struct Config.
+     Mcs48Cpu(ProgramMemory& program, PortBus* bus, Config config);
+ 
+-
++    Mcs48Cpu(ProgramMemory& program, PortBus* bus, Config config) : program_(program), bus_(bus), config_(config) {}
+ 
+     void reset();
