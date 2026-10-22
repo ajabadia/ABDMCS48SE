@@ -1,0 +1,70 @@
+name: CI
+
+# Compila y ejecuta la suite en Windows/MSVC, Linux/GCC, Linux/Clang y
+# macOS/Clang. El proyecto no tiene dependencias externas (ni JUCE, ni JSON,
+# ni Google Benchmark), asi que no hace falta instalar nada mas que el
+# compilador y CMake que ya traen los runners.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux / GCC
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+          - name: Linux / Clang
+            os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+          - name: Windows / MSVC
+            os: windows-latest
+            cc: ""
+            cxx: ""
+          - name: macOS / Clang
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake_args=(-S . -B build -DCMAKE_BUILD_TYPE=Release -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON)
+          if [ -n "${{ matrix.cc }}" ]; then
+            cmake_args+=(-DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }})
+          fi
+          cmake "${cmake_args[@]}"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build -C Release --output-on-failure --timeout 120
+
+      - name: Upload CTest logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-logs-${{ strategy.job-index }}
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore
