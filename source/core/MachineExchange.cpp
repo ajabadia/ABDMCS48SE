@@ -47,17 +47,22 @@ MachineInstance* MachineExchange::swapAtBlockBoundary(MachineInstance* current) 
         return current;
     }
 
-    // Si la cola de retiro esta llena, el cambio se difiere: la maquina
-    // nueva vuelve a quedar pendiente y la activa sigue sonando.
-    const std::size_t write = retireWrite_.load(std::memory_order_relaxed);
-    const std::size_t read = retireRead_.load(std::memory_order_acquire);
-    if (write - read >= retireCapacity_) {
-        pending_.store(candidate, std::memory_order_release);
-        return current;
+    // La primera instalacion no retira nada: no debe ocupar un hueco de la
+    // cola de retiro ni contarse como maquina pendiente de destruir.
+    if (current != nullptr) {
+        // Si la cola de retiro esta llena, el cambio se difiere: la maquina
+        // nueva vuelve a quedar pendiente y la activa sigue sonando.
+        const std::size_t write = retireWrite_.load(std::memory_order_relaxed);
+        const std::size_t read = retireRead_.load(std::memory_order_acquire);
+        if (write - read >= retireCapacity_) {
+            pending_.store(candidate, std::memory_order_release);
+            return current;
+        }
+
+        retired_[write % retireCapacity_] = current;
+        retireWrite_.store(write + 1, std::memory_order_release);
     }
 
-    retired_[write % retireCapacity_] = current;
-    retireWrite_.store(write + 1, std::memory_order_release);
     swapCount_.fetch_add(1, std::memory_order_relaxed);
     return candidate;
 }

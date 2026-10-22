@@ -10,7 +10,8 @@
 #include <string>
 
 #include "core/MachineInstance.h"
-#include "firmware/FirmwarePackage.h"
+#include "firmware/FirmwareTypes.h"
+#include "firmware/PackageLoader.h"
 
 namespace bdmcs48::machines {
 

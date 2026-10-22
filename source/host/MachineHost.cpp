@@ -3,6 +3,7 @@
 #include <cstring>
 #include <vector>
 
+#include "firmware/FirmwarePackage.h"
 #include "firmware/PackageLoader.h"
 #include "machines/MachineFactory.h"
 
@@ -35,6 +36,17 @@ bool MachineHost::loadPackage(const std::string& packageRoot, std::string& error
     firmware::LoadedPackage package;
     std::vector<firmware::ValidationIssue> issues;
     if (!firmware::PackageLoader::load(packageRoot, package, issues)) {
+        error = firmware::FirmwarePackage::formatIssues(issues);
+        log(kLogIdFirmwareFailed, 0, error);
+        return false;
+    }
+
+    return loadPackage(package, error);
+}
+
+bool MachineHost::loadPackage(const firmware::LoadedPackage& package, std::string& error) {
+    std::vector<firmware::ValidationIssue> issues;
+    if (!firmware::FirmwarePackage::validate(package.manifest, issues)) {
         error = firmware::FirmwarePackage::formatIssues(issues);
         log(kLogIdFirmwareFailed, 0, error);
         return false;

@@ -48,6 +48,13 @@ public:
     static constexpr std::uint32_t kInputLatch1 = 1;
     static constexpr std::size_t kLatchCount = 2;
 
+    // Rango real del parametro engine_clock. El contrato de MachineInstance
+    // entrega el parametro normalizado (0..1); aqui se proyecta a este rango.
+    // Multiplicar el reloj cambia la afinacion del firmware de tono (cada
+    // semitono es una potencia de dos) sin alterar la forma de onda.
+    static constexpr float kMinClockScale = 0.0625f; // cuatro octavas por debajo
+    static constexpr float kMaxClockScale = 8.0f;    // tres octavas por encima
+
     explicit GenericMcs48Machine(Config config = Config());
 
     // Instala el programa (banco 0 y 1) y la region de datos.
@@ -60,7 +67,7 @@ public:
     void setParameter(std::uint32_t id, float value) override;
     void writeInput(std::uint32_t id, float value) override;
     void runBlock(std::uint32_t frames, float* const* outputs, std::uint32_t channels) override;
-    core::EngineStatus status() const;
+    core::EngineStatus status() const override;
 
     // core::PortBus
     std::uint8_t readPort(std::uint8_t port) override;
@@ -73,7 +80,21 @@ public:
     std::uint8_t controlValue() const { return controlValue_; }
 
     const core::Mcs48Cpu& cpu() const { return cpu_; }
+    core::Mcs48Cpu& cpu() { return cpu_; }
+
+    // Flanco en la entrada T1 del 8048. Con el temporizador en modo contador
+    // (STRT CNT) cada pulso incrementa el contador; en modo timer no hace nada.
+    void externalTimerPulse() { cpu_.timer().externalPulse(); }
+
+    const core::Mcs48Timer& timer() const { return cpu_.timer(); }
+    core::Mcs48Timer& timer() { return cpu_.timer(); }
+
     double clockScale() const { return clockScale_; }
+
+    // Reloj efectivo (Hz) que ve la CPU, ya con la escala aplicada.
+    std::uint32_t effectiveClockHz() const {
+        return static_cast<std::uint32_t>(static_cast<double>(config_.clockHz) * clockScale_);
+    }
 
 private:
     void rebuildClock();
@@ -88,6 +109,10 @@ private:
     std::uint8_t controlValue_ = 0;
     std::uint8_t latches_[kLatchCount] = {0, 0};
     double clockScale_ = 1.0;
+    // Ciclos del CPU en el momento de reconstruir el reloj: runBlock compara
+    // contra cycleOffset_ + clock_.totalCycles() para no perder el sobrante de
+    // la instruccion en curso entre muestras.
+    std::uint64_t cycleOffset_ = 0;
     std::uint64_t framesRendered_ = 0;
 };
 
