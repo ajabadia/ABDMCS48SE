@@ -242,7 +242,7 @@ if(ABDMCS48SE_BUILD_TESTS)
             source/plugin/WebViewBridge.cpp
             source/webui/WebUIResources.cpp)
         target_link_libraries(bdmcs48se_plugin_smoke PRIVATE            bdmcs48se_webui)
-        target_link_libraries(bdmcs48se_plugin_smoke PRIVATE juce::juce_audio_devices)
+        target_link_libraries(bdmcs48se_plugin_smoke PRIVATE juce::juce_audio_devices juce::juce_audio_formats)
         target_compile_definitions(bdmcs48se_plugin_smoke PRIVATE
             JUCE_WEB_BROWSER=0
             JUCE_USE_CURL=0)

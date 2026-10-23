@@ -1,8 +1,8 @@
 # BDMCS48SE — Roadmap
 
-> **Estado:** implementación en curso (2026-10-22): core headless, firmware propio, host de referencia, esqueleto de plugin JUCE y CI multi-plataforma. El avance verificable está en «Estado actual».
+> **Estado (2026-10-23):** prototipo de instrumento funcional: core MCS-48 headless, firmware demo propio, CLI/host, plugin JUCE VST3/Standalone y WebView con teclado, matriz y presets. El CI general cubre Linux/GCC, Linux/Clang, Windows/MSVC, macOS/Clang y build de WebUI; el plugin JUCE solo se ha compilado y probado en Windows. La validación dentro de un DAW real sigue pendiente.
 >
-> **Regla del proyecto:** un hito se marca como completado solo con evidencia verificable, y la evidencia debe decir qué plataformas o rutas siguen sin probar.
+> **Regla del proyecto:** un hito se marca como completado solo con evidencia verificable, indicando qué plataformas, hosts y rutas siguen sin probar. Distinguir siempre implementación, prueba headless y validación en host real.
 
 ## Visión
 
@@ -20,32 +20,36 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - Anotar fecha, evidencia y notas en **Registro de hitos** al cerrar cada hito.
 - Los subelementos `[ ]` son trabajo pendiente; la fase completa requiere todos los subelementos y el criterio de aceptación.
 - Las tareas marcadas **Decisión** o **Validación** requieren información o elección antes de congelar una especificación.
-- Este roadmap es vivo: el usuario puede añadir datos y reordenar el alcance antes de que empiece la implementación.
+- Este roadmap es vivo: el usuario puede añadir datos y reordenar el alcance; los cambios que amplíen el contrato de producto requieren autorización.
 
 ## Estado actual
 
-- [x] Decisión de producto: orientar el diseño a un core MCS-48 headless reutilizable, no a un plugin rígidamente ligado a Mario Bros.
-- [x] Principio de aislamiento: la UI habla con el host JUCE, nunca directamente con el core; el hilo de audio no accede a la WebView.
-- [x] Política de distribución: el repositorio no incluye ROMs comerciales, no las solicita ni enlaza.
-- [ ] Ingeniería de requisitos y arquitectura: por completar con las decisiones de este roadmap.
-- [x] Código, compilación, tests y prototipo: core headless, firmware propio, host y esqueleto del plugin construidos. Evidencia: suite `bdmcs48_tests`, `docs/INSTRUMENT_SKELETON.md` y artefactos VST3/Standalone del 2026-10-22.
-- [x] **Portabilidad + CI preparado** (2026-10-22): CMake sin `CMAKE_CXX_COMPILER_FORCED` con las variables de MSVC dentro de `if(MSVC)`; sockets encapsulados en `source/host/HttpClient.*` y `source/host/HttpServer.*`; `TestEndToEnd` usa `httpGet` y ya no incluye cabeceras de Winsock; matriz Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang en `.github/workflows/ci.yml`.
-  **Validación:** el primer run de CI (PR #1) compiló y probó la rama POSIX sin cambios: las cuatro plataformas en verde, CTest 2/2 en cada una. La advertencia previa de «POSIX nunca compilado» ya no aplica, pero Windows fue lo único verificado también en Debug y con el plugin JUCE.
+- [x] Dirección del producto: core MCS-48 headless reutilizable; primer producto definido como instrumento creativo monofónico tocable por MIDI, no como emulador universal ni promesa de fidelidad de hardware.
+- [x] Aislamiento: la UI habla con el host JUCE, no directamente con el core; `processBlock` no llama a WebView/GUI ni accede al filesystem.
+- [x] Política de ROMs: no distribuir, solicitar ni enlazar ROMs comerciales; el firmware de prueba inicial es propio.
+- [x] Prototipo implementado: core, subconjunto CPU, firmware demo, CLI/host y plugin VST3/Standalone con WebView, teclado, matriz y presets. Evidencia: `source/`, `WebUI/`, `tests/PluginSmokeTest.cpp` y [INSTRUMENT_SKELETON.md](docs/INSTRUMENT_SKELETON.md).
+- [x] CI general: core/CLI en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang; job separado compila y comprueba WebUI. Evidencia: [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Este CI no compila el plugin JUCE.
+- [x] Verificación local del plugin en Windows/MSVC: `plugin_smoke`, build VST3/Standalone y apertura del Standalone con WebView2. Evidencia y límites en [INSTRUMENT_SKELETON.md](docs/INSTRUMENT_SKELETON.md).
+- [ ] Validación del plugin dentro de un DAW real: pendiente; la compilación, `plugin_smoke` y abrir Standalone no la sustituyen.
+- [ ] Portabilidad de presets, pruebas de audio/estrés ampliadas, licencia final y distribución/release siguen pendientes según sus fases.
 
 ---
 
-## Fase 0 — Descubrimiento y requisitos
+## Fase 0 — Descubrimiento y contrato de producto
 
-**Objetivo:** reducir supuestos y decidir qué problema debe resolver primero el framework.
+**Estado:** cerrada como definición del primer producto el 2026-10-23. Las decisiones fijan el alcance de la demo; no declaran aprobadas las capacidades de CPU, rendimiento, licencias de terceros ni validación en DAW.
 
-- [ ] Definir el primer caso de uso demostrable: ROM de prueba propia, perfil de terceros con licencia verificada o perfil Mario Bros. condicionado a adquisición lícita de ROM.
-- [ ] Acordar alcance de v1: emulación de CPU MCS-48, perfiles, ejecución de firmware y audio; aplazar funciones no esenciales.
-- [ ] Aclarar si el objetivo inicial es fidelidad a hardware, instrumento creativo basado en ROM, o ambos con criterios separados.
-- [ ] Identificar familias/variantes MCS-48 objetivo y diferencias de ROM, RAM, reloj, timers, interrupciones y puertos.
-- [ ] Definir plataformas objetivo, compiladores, sample rates, latencia y presupuesto de CPU por instancia.
-- [ ] Mantener un registro de supuestos, preguntas abiertas y fuentes; separar hechos comprobados de hipótesis.
+- [x] **Caso de uso:** demo de instrumento monofónico tocable por MIDI, con la matriz de comandos existente y guardado/carga de presets; la carga/sonido de firmware propio está probada en tests locales, y la experiencia completa se validará en `BDMCS48SE-DAW-01`.
+- [x] **Firmware de la demo:** firmware propio de prueba ya presente en el proyecto; la demo no depende de ROM comercial.
+- [x] **CPU:** mantener el subconjunto MCS-48 actual; no prometer 8048/8049 completo ni equivalencia de variantes hasta hacer pruebas de conformidad.
+- [x] **Propósito:** instrumento creativo basado en firmware. Fidelidad a hardware concreto queda como objetivo posterior y separado.
+- [x] **Plataformas:** Windows primero. Linux/macOS se convierten en objetivos del plugin cuando el plugin JUCE se integre en CI y supere esa matriz; el CI actual del core no demuestra compatibilidad del plugin.
+- [x] **Audio objetivo:** 44,1/48 kHz, mono o estéreo, bloques de 64–1024 muestras. Es el objetivo de validación; la cobertura de todas las combinaciones sigue pendiente.
+- [x] **Presets:** el objetivo portable guardará el estado junto con ID del firmware y SHA-256, sin incrustar ROM. La implementación actual solo persiste la ruta; falta implementarlo y probarlo en Fase 9, después de la validación DAW.
+- [x] **Licencia:** no se elige licencia final todavía; resolverla antes de cualquier release público tras revisar JUCE, código de terceros y firmware.
+- [x] Registrar lo decidido y separar preguntas abiertas en [DECISIONS_AND_QUESTIONS.md](docs/DECISIONS_AND_QUESTIONS.md).
 
-**Criterio de salida:** documento de requisitos aprobado por el usuario, primer caso de uso escogido y preguntas críticas de CPU/ROM/licencias identificadas.
+**Criterio de salida:** primer caso de uso y contrato de producto registrados. La Fase 0 está cerrada para la selección del producto; las comprobaciones técnicas y legales pendientes permanecen en sus fases y no se dan por resueltas por esta decisión.
 
 ## Fase 1 — Viabilidad de ROM y entorno legal/técnico
 
@@ -80,17 +84,19 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 
 ## Fase 3 — Prototipo headless y pruebas de referencia
 
-**Objetivo:** demostrar el core sin JUCE ni interfaz mediante un ejecutable de consola y render verificable.
+**Estado:** implementación base construida; aceptación de determinismo y rendimiento todavía parcial.
 
-- [ ] Preparar build CMake headless, solo después de autorización para programar.
-- [ ] Implementar primero harness de tests de instrucciones, reset, reloj y puertos.
-- [ ] Implementar CPU MCS-48 incrementalmente usando pruebas de referencia y ROM de test propia/autorizada.
-- [ ] Implementar bus, ROM/RAM y periféricos mínimos requeridos por el primer perfil, sin trasladar al core dependencias de GUI/MAME.
-- [ ] Implementar interfaz de perfil y una máquina de prueba que traduzca entradas a comportamiento de firmware documentado.
-- [ ] Añadir render WAV CLI, pruebas de determinismo y comparación golden/hash de renders controlados.
-- [ ] Medir tiempo de ejecución por bloque y por instancia en hardware/plataforma objetivo.
+- [x] Build CMake headless sin JUCE por defecto; la matriz CI compila y prueba el core/CLI en cuatro plataformas. Evidencia: `CMakeLists.txt` y `.github/workflows/ci.yml`.
+- [x] Harness para CPU, reset, reloj, temporizador, memoria y puertos. Evidencia: `tests/TestMcs48Cpu.cpp`, `tests/TestMcs48Timer.cpp`, `tests/TestToyRom.cpp`.
+- [x] Implementar y probar el subconjunto actual de CPU. `TestOpcodeCoverage` clasifica los 256 bytes de opcode (223 ejecutados, 7 explícitamente no soportados y 26 ilegales); esto no equivale a conformidad completa de toda la familia/variantes.
+- [x] Bus, ROM/RAM, temporizador y perfil de máquina de prueba construidos; evidencia en `source/core/`, `source/machines/GenericMcs48Machine.*` y sus pruebas.
+- [x] Máquina demo y firmware propio ejercitados por tests de host/instrumento; evidencia en `source/firmware/demo/`, `source/instrument/` y `tests/TestInstrument.cpp`. La evidencia no incluye validación de instrumento en DAW.
+- [x] Render WAV en CLI implementado (`source/cli/main.cpp`, `commandRender`/`writeWav`).
+- [ ] Añadir prueba de determinismo con misma entrada/configuración/semilla y comparar render golden/hash reproducible; el CLI por sí solo no demuestra esta propiedad.
+- [x] Benchmark de humo de `renderBlock` integrado en CTest y medición local Windows registrada en el historial.
+- [ ] Medir el plugin/core en los objetivos de 44,1/48 kHz y bloques 64–1024, y bajo varias instancias en hardware objetivo; la medición histórica de humo no cubre esta matriz.
 
-**Criterio de salida:** CLI renderiza salida reproducible de una ROM de prueba autorizada, con tests de CPU, temporización y E/S pasando; core construye y prueba sin JUCE.
+**Criterio de salida:** aún no cumplido: faltan comparación de renders deterministas y las mediciones de rendimiento en el perfil/plataformas acordadas. El código headless y el render CLI existen, pero no se marca toda la fase como validada.
 
 ## Fase 4 — ROM Lab y ecosistema de firmware propio
 
@@ -113,42 +119,61 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - [ ] Definir buses separados: parámetros continuos, comandos discretos y estado/salud de máquina.
 - [ ] Especificar colas de capacidad acotada, política de desbordamiento, coalescing y contadores observables.
 - [ ] Definir snapshots sin data races para estado, medidores, forma de onda reducida y diagnósticos.
-- [ ] Probar sample rates y tamaños de bloque variables; reset, cambios de reloj, spam de comandos y ROM/perfil inválido.
+- [ ] Probar sample rates y tamaños de bloque variables (incluidos objetivos 44,1/48 kHz y bloques 64–1024); reset, cambios de reloj, spam de comandos y ROM/perfil inválido.
 - [ ] Establecer invariantes de audio: no I/O, no locks, no logging, no allocaciones no acotadas en callback; salida definida durante silencio/error.
 - [ ] Definir mediciones de presupuesto de CPU/latencia para una y varias instancias.
 
 **Criterio de salida:** pruebas de stress y sanitizers disponibles donde proceda, comportamiento de overflow/error documentado y presupuesto acordado.
 
-## Fase 6 — Host JUCE headless y plugin mínimo
+## Fase 6 — Host JUCE y plugin
 
-**Objetivo:** conectar MIDI/DAW a la API del core sin depender todavía de WebView.
+**Objetivo:** conectar MIDI/DAW a la API del core; la validación del instrumento en DAW real se define en el hito `BDMCS48SE-DAW-01`.
 
-- [x] Definir adaptador `MachineHost`/instancia en el AudioProcessor sin filtrar tipos JUCE al SDK. Evidencia: `source/plugin/PluginProcessor.*`; el core no incluye JUCE.
-- [x] Implementar parámetros VST3/APVTS y traducción MIDI a eventos de máquina. Evidencia: parámetros `gain`/`release` y nota MIDI → `engine_clock` en `MonoVoice`.
-- [ ] Integrar CLI/core en una ruta de render consistente con el plugin.
-- [ ] Establecer serialización de estado/presets con referencia y hash de ROM/profile, nunca con datos de ROM comercial incrustados. Parcial: se guardan gain, release y la ruta del firmware, sin hash.
-- [ ] Verificar carga, reset, audio y recuperación ante ROM ausente en Standalone y VST3. Parcial: VST3 y Standalone compilan y la prueba headless `plugin_smoke` valida MIDI y audio; falta abrirlos en un host real.
-- [x] Documentar requisitos de threading y ownership entre Processor, editor y máquina. Evidencia: `docs/INSTRUMENT_SKELETON.md`.
-- [x] Editor JUCE mínimo con WebView: matriz de comandos, teclado de dos octavas, gain/release, panel de estado y presets. Evidencia: `source/plugin/PluginEditor.*`, `WebUI/` (bundle de Vite embebido), `source/webui/WebUIResources.*` y `plugin_smoke` (recursos embebidos, contrato del puente y matriz).
+- [x] Adaptador `MachineHost`/instancia en el AudioProcessor sin filtrar tipos JUCE al core; evidencia: `source/plugin/PluginProcessor.*`.
+- [x] Parámetros VST3/APVTS y MIDI → máquina; `PluginSmokeTest` mide A4, silencio tras soltar y matriz en el processor.
+- [x] CLI y plugin reutilizan el host/core común para la máquina MCS-48.
+- [ ] Completar aceptación en DAW real según el hito `BDMCS48SE-DAW-01`; compilación y `plugin_smoke` no sustituyen esta prueba.
+- [x] Documentar threading y ownership: [INSTRUMENT_SKELETON.md](docs/INSTRUMENT_SKELETON.md).
 
-**Estado:** instrumento con editor WebView (2026-10-23). El camino MIDI → voz → reloj → firmware → audio y la matriz están probados headless; el editor se ha arrancado en Standalone con WebView2.
+**Validación disponible:** Release de VST3 y Standalone, WebView2 y `plugin_smoke` comprobados en Windows/MSVC; el Standalone se abrió localmente. El plugin JUCE no está en el CI multiplataforma y no consta validación en un DAW real.
 
-**Criterio de salida:** plugin mínimo y CLI usan el mismo core, audio estable y parámetros/MIDI probados sin WebView.
+### Hito BDMCS48SE-DAW-01 — Validación del plugin en DAW real
+
+**Estado:** En progreso. Herramientas de captura/análisis listas (headless + analizador); validación manual en REAPER pendiente. DAW acordado: REAPER en Windows, usando la última versión estable disponible en la máquina de prueba; registrar la versión exacta al ejecutar.
+
+**Completado:**
+- [x] Flujo headless: `tools/audio-analysis/run_capture.py` genera WAV con el processor JUCE real (A4 MIDI) y `analyze_capture.py` produce informe JSON reproducible con SHA-256. Evidencia: `docs/evidence/BDMCS48SE-DAW-01/headless/headless-a4.wav`, `headless-a4.json`.
+- [x] Tests del analizador: 14/14 OK (`tools/audio-analysis/test_analyze_capture.py`).
+- [x] Documentación y estructura de evidencia: `docs/evidence/BDMCS48SE-DAW-01/README.md`, `tools/audio-analysis/README.md`, proyecto REAPER y scripts preparados.
+
+**Pasos a ejecutar:**
+1. Registrar REAPER y versión, Windows y versión, formato VST3, versión del plugin, dispositivo/configuración de audio activa, frecuencia de muestreo y tamaño de bloque observados. No imponer una frecuencia ni un buffer para este primer recorrido: usar lo que acepte/configure el DAW y anotar el valor real en `docs/evidence/BDMCS48SE-DAW-01/context.json`.
+2. Insertar el plugin, comprobar que carga el firmware demo propio y tocar una nota MIDI.
+3. Capturar la salida y verificar que contiene audio finito, no constante y audible; registrar el análisis/medición usado.
+4. Guardar el proyecto, cerrarlo y volverlo a abrir; comprobar que el plugin, estado y preset vuelven correctamente.
+5. Recargar el plugin y comprobar que vuelve a sonar; accionar reset y confirmar recuperación.
+6. Probar recuperación con una ruta de firmware ausente usando un estado/paquete de prueba reproducible; registrar el error y el estado resultante.
+7. Registrar la carga de CPU indicada por REAPER y los dropouts/underruns que reporte; anotar también cualquier click audible. No hay umbral numérico acordado para esta primera validación.
+8. Repetir con al menos dos instancias simultáneas y registrar el coste total y cualquier degradación.
+
+**Captura y análisis:** renderizar/capturar WAV desde REAPER y analizarlo con el script reproducible [analyze_capture.py](tools/audio-analysis/analyze_capture.py), documentado en [tools/audio-analysis/README.md](tools/audio-analysis/README.md). Emite JSON con host/rendimiento observados (por `--context`, sin umbrales inventados) y datos WAV: finitud, no-constancia, duración, RMS, peak, clipping observado, DC por canal, segmento activo y frecuencia dominante estimada; guardar el JSON junto a la captura. La evidencia headless sirve para verificar el pipeline, pero **no sustituye** la validación en REAPER.
+
+**Evidencia de aceptación:** instrucciones reproducibles, versiones/plataforma, configuración real del DAW, resultados de cada paso, WAV originales en `captures/`, JSON en `reports/`, proyecto guardado como `BDMCS48SE-DAW-01.RPP`, screenshots, métricas observadas de CPU/dropouts y limitaciones. No se fuerza sample rate/buffer en este recorrido; la cobertura de 44,1/48 kHz, mono/estéreo y bloques de 64–1024 sigue siendo objetivo de pruebas ampliadas en Fase 5. No inventar resultados ni interpretar «abre» como validación completa.
 
 ## Fase 7 — Bridge y GUI a medida
 
-**Objetivo:** añadir UI reemplazable que no rompa el aislamiento ni comprometa el hilo de audio.
+**Estado:** la interfaz mínima existe y tiene verificación de bundle, bridge y apertura en Standalone en Windows; la validación en DAW real sigue pendiente en `BDMCS48SE-DAW-01`.
 
-- [ ] Definir protocolo tipado y versionado de UI; JSON solo en la frontera del host, no dentro del core/SDK.
-- [ ] JS → JUCE: funciones nativas concretas para parámetros, comandos, reset y operaciones de archivos; validar tipos, rangos y permisos en C++.
-- [ ] JUCE → JS: `emitEventIfBrowserIsVisible` para estado/snapshots en timer de UI; esperar a que la página esté lista antes de emitir.
-- [ ] Mantener selección y lectura de ROM en C++ en hilo apropiado; no aceptar rutas arbitrarias del navegador ni tocar archivos desde audio thread.
-- [ ] Ninguna llamada JS directa al core; `processBlock` no invoca WebView ni callbacks de UI.
-- [ ] Separar status de alta frecuencia de visualización reducida; no transferir audio muestra a muestra.
-- [ ] Diseñar panel principal: Header (ROM/CPU/errors/gain), Command Matrix, Circuit Bend, Output y Diagnostics; el secuenciador queda secundario.
-- [ ] Diseñar accesibilidad, escalado, controles alternativos y visualización legible de fallos.
+- [x] Protocolo de UI versionado (`kUiProtocolVersion`) en el límite del host; no forma parte del core.
+- [x] JS → JUCE: teclado MIDI, parámetros, filas de matriz, reset y presets mediante funciones nativas; C++ valida rangos/valores en el bridge.
+- [x] JUCE → JS: snapshot/evento de estado a 20 Hz y consulta inicial `getState`; evidencia: `PluginEditor.cpp`, `WebUI/src/main.js` y prueba del bridge.
+- [x] Sin llamada JS directa al core; `processBlock` no invoca WebView ni GUI.
+- [x] Estado/diagnóstico a frecuencia moderada, sin enviar audio muestra a muestra.
+- [x] UI mínima del primer producto: teclado de dos octavas, matriz, controles gain/release, estado y presets; no equivale al diseño completo de paneles de futuras máquinas.
+- [ ] Validar el flujo integrado en DAW real con el guion `BDMCS48SE-DAW-01`.
+- [ ] Validar accesibilidad, escalado y fallos en los hosts que se declaren objetivo antes de una release.
 
-**Criterio de salida:** GUI controla funciones autorizadas, refleja estado en vivo sin acceso directo al core y pasa pruebas de estrés de mensajes y frecuencia de actualización.
+**Criterio de salida:** la existencia de la GUI está demostrada por el bundle, `plugin_smoke` y la apertura del Standalone en Windows; la aceptación del producto en DAW no se da por cumplida hasta superar y documentar `BDMCS48SE-DAW-01`.
 
 ## Fase 8 — Perfil de compatibilidad Mario Bros. (condicional)
 
@@ -163,16 +188,16 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 
 **Criterio de salida:** perfil documentado y reproducible, límites de licencia revisados y pruebas con insumos autorizados. Si falta ROM legal, el hito permanece bloqueado sin impedir el resto del SDK.
 
-## Fase 9 — Circuit bending, presets y rendimiento
+## Fase 9 — Circuit bending, presets portables y rendimiento
 
-**Objetivo:** añadir manipulación controlable sin poner en riesgo estabilidad o determinismo.
+**Objetivo:** después de validar el flujo base en DAW real, completar portabilidad de presets, estrés y rendimiento sin poner en riesgo estabilidad o determinismo.
 
 - [ ] Fijar semántica para latch mutation, DAC quantization, clock bend, bus/address mutation y freeze.
 - [ ] Aplicar deformaciones por capas con valores neutros equivalentes al baseline.
 - [ ] Utilizar PRNG propio seedable; separar mutación reproducible de aleatoriedad no determinista.
 - [ ] Validar que reset recupera la máquina y que inputs extremos no causan acceso inválido, cuelgue o desbordamiento.
 - [ ] Medir cada efecto y número de instancias, documentando límites recomendados.
-- [ ] Definir preset portable (perfil/ROM id+hash, parámetros y versión), cuidando rutas absolutas y datos propietarios.
+- [ ] Implementar preset portable que conserve el estado junto con ID y SHA-256 del firmware; evitar depender solo de rutas absolutas y no incrustar ROM. Definir versionado/migración y recuperación ante firmware ausente o cambiado.
 
 **Criterio de salida:** todos los controles son reversibles, automatizables, deterministas bajo seed y pasan pruebas de fuzz/valores límite.
 
@@ -181,7 +206,7 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 **Objetivo:** preparar releases cuando exista producto testeable y posición legal definida.
 
 - [ ] Confirmar decisión de licencia tras auditoría de MAME y firmware distribuidos.
-- [ ] Preparar CI/builds reproducibles para plataformas acordadas. Parcial: matriz de cuatro plataformas en `.github/workflows/ci.yml`, en verde desde el primer run (PR #1); faltan builds de release, caché de dependencias y artefactos por plataforma.
+- [ ] Preparar CI/builds reproducibles para plataformas acordadas. Parcial: el CI general compila/prueba el core y CLI en cuatro plataformas y construye/comprueba WebUI; no compila el plugin JUCE. Faltan CI del plugin por plataforma, builds de release y artefactos instalables.
 - [ ] Probar en DAWs/hosts objetivo, validar formato de plugin y reportar métricas de audio.
 - [ ] Documentar instalación, ROMs permitidas, perfiles propios, problemas y diagnóstico.
 - [ ] Añadir badges solo tras primer commit/build y valores verificables; no publicar badges de licencia hasta definir licencia.
@@ -196,25 +221,25 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - Polifonía lograda por múltiples instancias hasta medir su coste y acordar comportamiento.
 - Granular avanzada, AU/CLAP/AAX y editor universal de ROM.
 - Distribuir, solicitar o enlazar ROMs comerciales.
-- Implementar código durante la etapa de recopilación/definición sin autorización expresa.
+- Ampliar el producto fuera del contrato acordado sin autorización expresa; el prototipo actual ya está implementado.
 
-## Decisiones abiertas
+## Decisiones abiertas fuera del contrato inicial
 
-1. ¿La primera demo será una ROM MCS-48 propia, un firmware libre con permiso comprobado, o ambas?
-2. ¿Qué variante(s) MCS-48 y condiciones de reloj se consideran objetivo inicial?
-3. ¿Qué target de CPU, sample rates y tamaños de bloque son prioritarios?
-4. ¿El SDK será solo librería C++ embebible al inicio, o también API estable de plugins de machine externos?
-5. ¿Machine Profile describe solo datos y un adaptador compilado, o debe soportar extensiones dinámicas desde v1?
-6. ¿Qué estructura de archivos/repo y nombre público se prefieren: BDMCS48SE, ABDMCS48SE o SDK + producto?
-7. ¿Qué herramientas/IDE/ensamblador MCS-48 se tienen disponibles y cuáles permiten distribuir firmware creado?
-8. ¿Qué condiciones deben cumplir las ROMs «libres» antes de usarlas (licencia explícita, no comercial, atribución)?
-9. ¿La UI inicial seguirá siendo JUCE WebView o se reserva la opción de otro frontend para futuros productos?
+1. ¿Qué DAW y versión serán el primer host oficialmente objetivo para `BDMCS48SE-DAW-01`, y qué umbrales cuantitativos de CPU/dropouts se aceptarán?
+2. ¿Qué variantes exactas y capacidades de CPU se añadirán al subconjunto actual después de pruebas de conformidad? No se promete 8048/8049 completo.
+3. ¿Cuál será el nombre público definitivo (BDMCS48SE, ABDMCS48SE u otro)?
+4. ¿El SDK se distribuirá inicialmente como fuente C++ embebible o necesitará ABI/paquete estable y extensiones externas de machine?
+5. ¿El firmware package seguirá siendo carpeta o será ZIP, y qué campos de manifest serán normativos?
+6. ¿Qué ensamblador/simulador se utilizará para crear y verificar nuevos firmware propios, y qué permisos rigen su distribución?
+7. ¿Cuál será la licencia final del producto, tras auditar JUCE, cualquier código de terceros y firmware? No hacer release público antes de resolverla.
+8. ¿Qué procedimiento documentará origen y permisos de firmware/ROM de terceros? La política de ROM comercial permanece: no distribuir, solicitar ni enlazar.
 
 ## Registro de hitos
 
 | Fecha | Hito | Evidencia / notas |
 |---|---|---|
-| 2026-10-21 | Visión inicial y restricciones reunidas | Información del usuario; pendientes de validación externa y decisiones abiertas. |
-| 2026-10-23 | Editor WebView y matriz de comandos funcional | `docs/INSTRUMENT_SKELETON.md`; 8 filas nota → comando con probabilidad, delay y mutación en el host; puente JSON (`WebViewBridge`) y página embebida con `juce_add_binary_data`; suite 132/132 en Debug y Release, `plugin_smoke` con disparo, delay, mutación, recursos y roundtrip; Standalone abre con WebView2. |
-| 2026-10-22 | Portabilidad + CI preparado (CI en verde en cuatro plataformas) | CMake portable y sockets aislados en `source/host/`; tests sin cabeceras de Winsock; matriz Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang en `.github/workflows/ci.yml`. Windows local: Debug y Release 119/119, CTest 2/2, benchmark de humo 512 muestras en 0,067 ms (~160× tiempo real). Primer run de CI: los cuatro trabajos en verde, CTest 2/2 en cada uno, sin cambios en la rama POSIX. |
-| 2026-10-22 | Esqueleto del instrumento monofónico (MIDI + JUCE, sin UI) | `docs/INSTRUMENT_SKELETON.md`; firmware de voz propio, voz monofónica, `engine_clock` corregido, ejecución de CPU hasta ciclos absolutos, liberación que no se alarga al repetir el parámetro, VST3 + Standalone con JUCE 9.0.4 y prueba `plugin_smoke`. |
+| 2026-10-21 | Visión inicial y restricciones reunidas | Información del usuario; las decisiones de producto se cerraron posteriormente y las validaciones técnicas siguen según el roadmap. |
+| 2026-10-23 | Editor WebView y matriz de comandos funcional | `docs/INSTRUMENT_SKELETON.md`; 8 filas nota → comando con probabilidad, delay y mutación; puente JSON versionado y bundle embebido; suite y `plugin_smoke` registrados en Windows Debug/Release, Standalone abierto con WebView2. No consta prueba en DAW real. |
+| 2026-10-23 | BDMCS48SE-PRODUCT-00 — contrato de producto y saneamiento documental | Fase 0 cerrada para definir demo monofónica MIDI, firmware propio, matriz/presets, subconjunto MCS-48, Windows primero y objetivos de audio. GUI existente separada de validación DAW; licencia final y DAW objetivo siguen abiertos. |
+| 2026-10-22 | Portabilidad + CI del core (cuatro plataformas) | CMake portable y sockets aislados; Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang con CTest 2/2; job WebUI añadido después. El plugin JUCE no forma parte de la matriz. Medición local de benchmark de humo en Windows según registro anterior. |
+| 2026-10-22 | Esqueleto del instrumento monofónico (MIDI + JUCE) | Firmware de voz propio, voz monofónica, `engine_clock` y ejecución por ciclos absolutos; VST3 + Standalone y `plugin_smoke`. Verificado en Windows/MSVC; no equivale a validación en host DAW. |

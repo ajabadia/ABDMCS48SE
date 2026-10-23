@@ -2,7 +2,10 @@
 
 > **Estado:** instrumento con editor **WebView**, a 2026-10-23. El plugin se
 > construye como VST3 + Standalone, recibe MIDI, suena y expone la matriz de
-> comandos y los parámetros desde una página embebida en el binario.
+> comandos y los parámetros desde una página embebida en el binario. La suite,
+> `plugin_smoke`, el build del plugin y la apertura del Standalone se han
+> verificado en Windows/MSVC; el plugin JUCE no forma parte de la CI de cuatro
+> plataformas y todavía no se ha validado dentro de un DAW real.
 
 ## Qué se ha construido
 
@@ -185,9 +188,10 @@ se ha elegido por ti.
 - `plugin_smoke`: MIDI → audio (440 Hz, silencio tras soltar), matriz (disparo,
   probabilidad 0, delay de 100 ms, mutación increment), recursos embebidos,
   contrato del puente y roundtrip de estado/matriz.
-- Build Release de VST3 + Standalone correcto con JUCE 9.0.4, MSVC 19.51 y
-  WebView2. El editor se ha arrancado en Standalone; falta probarlo dentro de un
-  DAW real.
+- Build Release de VST3 + Standalone y `plugin_smoke` registrados en Windows con
+  JUCE 9.0.4, MSVC 19.51 y WebView2. El editor se ha arrancado en Standalone;
+  no se ha probado en un DAW real. Linux/macOS CI ejecutan core/CLI, no el plugin
+  JUCE.
 
 ## Pendiente (no incluido a propósito)
 

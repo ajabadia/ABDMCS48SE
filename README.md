@@ -2,7 +2,7 @@
 
 **BDMCS48SE** (*Bus/Data MCS-48 Sound Engine*) es el nombre de trabajo de un proyecto para crear instrumentos musicales a partir de firmware MCS-48. El repositorio de GitHub es [ajabadia/ABDMCS48SE](https://github.com/ajabadia/ABDMCS48SE); la decisión final sobre el nombre del producto sigue abierta.
 
-> **Estado:** núcleo headless, firmware propio, host de referencia, plugin JUCE con editor WebView (matriz de comandos, teclado, estado y presets) y CI multi-plataforma. Windows, Linux (GCC y Clang) y macOS compilan y pasan la suite; el plugin JUCE solo se ha verificado en Windows.
+> **Estado (2026-10-23):** núcleo headless, firmware propio, host de referencia, plugin JUCE VST3/Standalone con editor WebView y CI general para core/CLI en Windows, Linux y macOS, además de build WebUI. El build y `plugin_smoke` del plugin y la apertura del Standalone están verificados en Windows; no consta validación en un DAW real y el plugin JUCE no está en la CI multiplataforma. El primer producto se define como instrumento creativo monofónico MIDI; la validación DAW prioriza REAPER sobre Windows, con configuración de audio del propio DAW y captura WAV analizada por script. Véanse [roadmap](ROADMAP.md) y [decisiones](docs/DECISIONS_AND_QUESTIONS.md).
 
 ## Visión
 
@@ -40,7 +40,7 @@ El hilo de audio no debe acceder al filesystem, bloquearse ni llamar a la GUI/We
 - Un motor MCS-48 headless que pueda probarse sin plugin ni interfaz.
 - Perfiles de máquina y firmware intercambiables, sin convertir el proyecto en un emulador universal.
 - Un CLI de render y tests como primera vía de validación.
-- Un host JUCE VST3/Standalone y una UI WebView a medida en fases posteriores.
+- El host JUCE VST3/Standalone y la UI WebView mínima existen como prototipo; su validación en DAW real sigue pendiente.
 - Firmware propio de prueba para avanzar sin depender de una ROM comercial.
 - Evaluar Mario Bros. como perfil de compatibilidad cuando se hayan identificado los requisitos técnicos y legales.
 
@@ -51,9 +51,9 @@ El hilo de audio no debe acceder al filesystem, bloquearse ni llamar a la GUI/We
 - Dar por garantizada la polifonía antes de medir el coste de múltiples instancias.
 - Distribuir ROMs comerciales.
 
-## Interfaz prevista
+## Interfaz objetivo futura
 
-La primera interfaz se plantea con cinco áreas principales:
+La UI mínima implementada para la primera demo incluye teclado, matriz, controles gain/release, estado y presets. Las cinco áreas siguientes son una dirección de evolución, no la descripción de la interfaz actual:
 
 - **Header:** estado de ROM, CPU, errores y master gain.
 - **Command Matrix:** MIDI → comando, con probabilidad, delay y mutación.
@@ -90,7 +90,7 @@ ctest --test-dir build -C Release --output-on-failure
 - La UI monta el keybed compartido de **ABDShared** (`@abdsynths/midi-keyb`), el mismo que ABDMS2000; no hay copia en este repo. El build lo resuelve desde el checkout hermano `../ABDShared` o desde `ABD_SHARED_DIR`, relativo a la raíz del repo (`node Scripts/build_webui.js` falla con un mensaje claro si no lo encuentra).
 - El job `webui` de CI clona `ajabadia/ABDShared` en `.ci/ABDShared`, compila la página y comprueba el bundle antes de que lo embeba CMake; un cambio en la UI o en el keybed compartido que rompa la página falla ahí, no en el primer build del plugin.
 - `.github/workflows/ci.yml` compila y prueba en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang, y sube los logs de CTest como artefacto cuando algo falla.
-- Estado por plataforma: CI en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una) desde el primer run. En local, Windows está verificado en Debug y Release (119/119) con el plugin JUCE y el benchmark de humo (~160× tiempo real).
+- Estado por plataforma: el CI general del core/CLI está en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una); el job WebUI construye y comprueba el bundle. En local, Windows está verificado en Debug y Release (suite 132/132), con el build del plugin JUCE, `plugin_smoke` y benchmark de humo. Estos resultados no equivalen a validación en DAW real ni cubren todavía la matriz de audio objetivo; los detalles y límites están en [INSTRUMENT_SKELETON.md](docs/INSTRUMENT_SKELETON.md).
 
 ## Roadmap y documentación
 
@@ -99,9 +99,9 @@ ctest --test-dir build -C Release --output-on-failure
 - [Paquete de firmware](docs/FIRMWARE_PACKAGE.md): propuesta de manifest, validación, bancos MCS-48 y ciclo de vida/hot swap (aún no normativa).
 - [Esqueleto del instrumento](docs/INSTRUMENT_SKELETON.md): cadena MIDI → voz → CPU → DAC, afinación, hilos y build del VST3/Standalone.
 - [Teclado compartido](docs/KEYBED.md): cómo se monta el keybed de ABDShared, el contrato de altura y qué revisar al actualizarlo.
-- [Decisiones y preguntas abiertas](docs/DECISIONS_AND_QUESTIONS.md): acuerdos, supuestos y temas que iremos resolviendo.
+- [Decisiones y preguntas abiertas](docs/DECISIONS_AND_QUESTIONS.md): contrato de producto confirmado, supuestos y temas aún abiertos.
 
-El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia, incluida la que falta por verificar.
+El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia, incluida la que falta por verificar. La descripción general del producto y su estado de validación se mantienen sincronizados con ese roadmap.
 
 ## Contribuciones y conversación
 

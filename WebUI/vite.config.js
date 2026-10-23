@@ -40,25 +40,18 @@ export default defineConfig({
   root: webUiRoot,
   base: './',
   resolve: {
-    alias: [
-      {
-        find: /^@abdsynths\/midi-keyb\/keyboard\.css$/,
-        replacement: path.join(sharedRoot, 'Code', 'MidiKeyboard', 'src', 'keyboard.css'),
-      },
-      {
-        find: /^@abdsynths\/midi-keyb$/,
-        replacement: keyboardSource,
-      },
-      {
-        find: /^@abdsynths\/shared\/components\/wheel\.js$/,
-        replacement: path.join(sharedRoot, 'Components', 'wheel.js'),
-      },
-      {
-        // @import de keyboard.css: styles/components/*.css
-        find: /^@abdsynths\/shared\/styles\//,
-        replacement: path.join(sharedRoot, 'Assets', 'styles') + path.sep,
-      },
-    ],
+    alias: {
+      '@abdsynths/shared/styles': path.join(sharedRoot, 'Assets', 'styles'),
+      '@abdsynths/shared/components': path.join(sharedRoot, 'Components'),
+      '@abdsynths/shared/Components': path.join(sharedRoot, 'Components'),
+      '@abdsynths/shared': sharedRoot,
+      '@components': path.join(sharedRoot, 'Components'),
+      '@assets': path.join(sharedRoot, 'Assets'),
+      '@styles': path.join(sharedRoot, 'Assets', 'styles'),
+      '@abdsynths/midi-keyb/keyboard.css': path.join(sharedRoot, 'Code', 'MidiKeyboard', 'src', 'keyboard.css'),
+      '@abdsynths/midi-keyb': keyboardSource,
+      '@abdsynths/shared/components/wheel.js': path.join(sharedRoot, 'Components', 'wheel.js'),
+    },
   },
   build: {
     outDir: 'dist',

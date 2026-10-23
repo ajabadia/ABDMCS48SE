@@ -1,0 +1,17 @@
+{
+  "host": {
+    "daw": "REAPER",
+    "dawVersion": "7.82",
+    "os": "Microsoft Windows 11 Pro Insider Preview",
+    "osVersion": "10.0.26220 (Build 26220)",
+    "pluginFormat": "VST3",
+    "pluginVersion": "0.1.0",
+    "sampleRate": null,
+    "bufferSize": null,
+    "instances": 1
+  },
+  "performance": {
+    "cpuPercent": null,
+    "dropouts": null
+  }
+}

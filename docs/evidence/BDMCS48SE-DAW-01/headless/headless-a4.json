@@ -1,0 +1,59 @@
+{
+  "audio": {
+    "activeSegment": {
+      "durationSeconds": 5.088208333333333,
+      "endFrameExclusive": 268005,
+      "frames": 244234,
+      "frequencyEstimateValid": true,
+      "startFrame": 23771
+    },
+    "activeThresholdDbfs": -60.0,
+    "activeWindowMs": 10,
+    "channels": 2,
+    "clippedSamples": 0,
+    "clippingObserved": false,
+    "dcOffsetPerChannel": [
+      3.367231951819526e-07,
+      3.367231951819526e-07
+    ],
+    "dominantFrequencyHz": 479.0394906597493,
+    "durationSeconds": 6.0,
+    "finite": true,
+    "frames": 288000,
+    "frequencyEstimateNote": "Estimate from the first active segment above -60 dBFS using a 10 ms centered RMS window; FFT resolution depends on segment duration.",
+    "nonConstant": true,
+    "nonSilentFrames": 243839,
+    "nonSilentSamples": 487678,
+    "peak": 0.25653982162475586,
+    "peakDbfs": -11.81690423135052,
+    "rms": 0.20661835955035301,
+    "rmsDbfs": -13.696621817301018,
+    "sampleRate": 48000,
+    "truePeak": null,
+    "truePeakDbfs": null,
+    "truePeakNote": "Not estimated; peak is the maximum absolute decoded sample."
+  },
+  "host": {
+    "bufferSize": null,
+    "daw": "JUCE headless render (no DAW)",
+    "dawVersion": null,
+    "instances": null,
+    "os": "Windows",
+    "osVersion": null,
+    "pluginFormat": "JUCE AudioProcessor (headless)",
+    "pluginVersion": null,
+    "sampleRate": null
+  },
+  "performance": {
+    "cpuPercent": null,
+    "dropouts": null,
+    "threshold": "not-defined for the DAW-01 baseline"
+  },
+  "schemaVersion": 1,
+  "source": {
+    "fileName": "headless-a4.wav",
+    "format": "WAV",
+    "sha256": "1b3691c57331a3e4e67e459159f00d845b2e303af7591f7a22020a182c790b0a",
+    "subtype": "PCM_24"
+  }
+}

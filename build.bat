@@ -1,29 +1,28 @@
 @echo off
+
+rem Si no estamos ya dentro de una ventana persistente, relanzarnos con cmd /k
+if not defined BUILD_BAT_PERSISTENT (
+    set BUILD_BAT_PERSISTENT=1
+    start "" cmd /k "%~f0" %*
+    exit /b
+)
+
 setlocal enabledelayedexpansion
 
 rem ============================================================================
-rem build.bat - ABDMCS48SE (core MCS-48 headless)
-rem ============================================================================
-rem
-rem CODIFICACION
-rem cmd.exe lee este fichero en la codificacion del SISTEMA, no en UTF-8: un
-rem acento se parte en dos bytes y de ahi sale un comando que no existe en
-rem mitad de un echo. Por eso todo lo que hay aqui es ASCII puro.
-rem
-rem EL COMPILADOR
-rem Se busca con vswhere porque una ruta escrita a fuego solo funciona en la
-rem maquina de quien la escribio. Lo que decide es vcvarsall.bat: el
-rem directorio de Visual Studio existe tambien en una instalacion sin la
-rem carga de trabajo de C++, y una deteccion que mirara el directorio daria
-rem por buena esa instalacion.
-rem
-rem ARGS
-rem   build.bat [destino]
-rem     destino  Release (por defecto) o Debug
+rem build.bat - ABDMCS48SE (build ALL versions)
 rem ============================================================================
 
 set "CONFIG=Release"
-if not "%~1"=="" set "CONFIG=%~1"
+set "FORCE_WEBUI=0"
+
+for %%A in (%*) do (
+    if /i "%%~A"=="Debug" set "CONFIG=Debug"
+    if /i "%%~A"=="Release" set "CONFIG=Release"
+    if /i "%%~A"=="--webui" set "FORCE_WEBUI=1"
+    if /i "%%~A"=="-w" set "FORCE_WEBUI=1"
+    if /i "%%~A"=="--rebuild-webui" set "FORCE_WEBUI=1"
+)
 
 set "PF86=%ProgramFiles(x86)%"
 set "VSWHERE=%PF86%\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -82,11 +81,6 @@ goto error
 :cl_ok
 
 rem --- CMake ---------------------------------------------------------------
-rem Primero el que trae Visual Studio, que ya sabemos que existe. Si no esta,
-rem se busca en la instalacion propia del proyecto y en el PATH. El mensaje
-rem de error Nombra la ruta en la que se ha buscado: si no, con
-rem CMAKE_PATH vacio el error diria "CMake not found at " y a continuacion
-rem nada, senalando el aire.
 set "CMAKE_PATH=%VS_ROOT%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 set "CMAKE_EN_VS=%CMAKE_PATH%"
 if exist "%CMAKE_PATH%" goto cmake_ok
@@ -105,28 +99,65 @@ goto error
 
 set "BUILD_DIR=build"
 
+rem --- Build WebUI if needed (required for JUCE plugin embed) ------------
+set "NEED_WEBUI=0"
+if not exist "%~dp0WebUI\dist\index.html" set "NEED_WEBUI=1"
+if "%FORCE_WEBUI%"=="1" set "NEED_WEBUI=1"
+
+if "!NEED_WEBUI!"=="0" (
+    powershell -NoProfile -Command "if ((Get-ChildItem -Path '%~dp0WebUI\src', '%~dp0WebUI\index.html' -Recurse | Measure-Object -Property LastWriteTime -Maximum).Maximum -gt (Get-Item '%~dp0WebUI\dist\index.html').LastWriteTime) { exit 1 } else { exit 0 }" >nul 2>&1
+    if errorlevel 1 (
+        echo [INFO] Detected changes in WebUI sources. Rebuilding bundle...
+        set "NEED_WEBUI=1"
+    )
+)
+
+if "!NEED_WEBUI!"=="1" (
+    echo [INFO] Building WebUI bundle with Vite...
+    where node >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Node.js not found in PATH. Install Node.js or build WebUI manually:
+        echo         npm --prefix WebUI install
+        echo         node Scripts/build_webui.js
+        goto error
+    )
+    pushd "%~dp0"
+    node Scripts\build_webui.js
+    if errorlevel 1 (
+        popd
+        echo [ERROR] WebUI build failed. Check ../ABDShared checkout or ABD_SHARED_DIR.
+        goto error
+    )
+    popd
+    echo [INFO] WebUI built successfully.
+) else (
+    echo [INFO] WebUI/dist/index.html is up to date. Using existing bundle.
+)
+
 echo ========================================
-echo  ABDMCS48SE - core MCS-48 headless
+echo  ABDMCS48SE - build ALL versions
 echo  Configuracion: %CONFIG%
 echo  Directorio:    %BUILD_DIR%
 echo  Visual Studio: %VS_ROOT%
 echo  cmake:         %CMAKE_PATH%
+echo  Plugin:        ON (VST3 + Standalone)
+echo  CLI/Tests/Bench: ON
 echo ========================================
 
 rem --- Configurar -----------------------------------------------------------
-"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0
+"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
 if not errorlevel 1 goto cmake_configurado
 echo [WARNING] CMake configuration failed. Clearing CMakeCache.txt and retrying...
 if exist "%BUILD_DIR%\CMakeCache.txt" del /q "%BUILD_DIR%\CMakeCache.txt"
 if exist "%BUILD_DIR%\CMakeFiles" rmdir /s /q "%BUILD_DIR%\CMakeFiles"
-"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0
+"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
 if not errorlevel 1 goto cmake_configurado
 echo [ERROR] CMake configuration failed again with code %ERRORLEVEL%
 goto error
 :cmake_configurado
 
-rem --- Compilar -------------------------------------------------------------
-echo [INFO] Building core, firmware loader, machines, host and tests...
+rem --- Compilar TODO --------------------------------------------------------
+echo [INFO] Building ALL targets (core, firmware, host, CLI, tests, benchmarks, plugin VST3+Standalone)...
 "%CMAKE_PATH%" --build "%BUILD_DIR%" --config %CONFIG% --parallel
 if not errorlevel 1 goto compilado
 echo [ERROR] Build failed with code %ERRORLEVEL%
@@ -134,23 +165,32 @@ goto error
 :compilado
 
 rem --- Tests ----------------------------------------------------------------
-echo [INFO] Running tests...
+echo [INFO] Running tests (core + plugin_smoke if available)...
 "%CMAKE_PATH%" --build "%BUILD_DIR%" --config %CONFIG% --target run_tests
 if errorlevel 1 goto tests_fallo
 goto tests_ok
 
 :tests_fallo
+echo.
 echo [ERROR] The test suite failed.
+echo [INFO] View full test output with:
+echo        ctest --test-dir build --rerun-failed --output-on-failure
 goto error
 
 :tests_ok
 echo ========================================
-echo  [SUCCESS] Build and tests finished.
-echo  CLI: %BUILD_DIR%\bdmcs48se\Release\bdmcs48se.exe
+echo  [SUCCESS] All versions built and tests passed.
+echo  CLI:        %BUILD_DIR%\bdmcs48se\%CONFIG%\bdmcs48se.exe
+echo  Standalone: %BUILD_DIR%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe
+echo  VST3:       %BUILD_DIR%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3
 echo ========================================
+echo.
+pause
 exit /b 0
 
 :error
 echo.
 echo [ERROR] Build failed.
+echo.
+pause
 exit /b 1

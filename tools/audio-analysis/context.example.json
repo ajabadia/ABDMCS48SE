@@ -1,0 +1,17 @@
+{
+  "host": {
+    "daw": "REAPER",
+    "dawVersion": null,
+    "os": "Windows",
+    "osVersion": null,
+    "pluginFormat": "VST3",
+    "pluginVersion": null,
+    "sampleRate": null,
+    "bufferSize": null,
+    "instances": null
+  },
+  "performance": {
+    "cpuPercent": null,
+    "dropouts": null
+  }
+}

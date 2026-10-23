@@ -11,10 +11,16 @@
 // No abre ventanas ni dispositivos de audio: solo llama a prepareToPlay y
 // processBlock, que es exactamente lo que hace un DAW.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include <juce_audio_formats/juce_audio_formats.h>
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -31,6 +37,16 @@ constexpr double kSampleRate = 44'100.0;
 constexpr int kBlockSize = 64;
 
 int failures = 0;
+
+struct RenderOptions {
+    std::string capturePath;
+    double sampleRate = kSampleRate;
+    double durationSeconds = 6.0;
+    int note = 69;
+    double noteOnSeconds = 0.5;
+    double noteOffSeconds = 5.5;
+    float velocity = 0.9f;
+};
 
 void check(bool condition, const char* what) {
     if (!condition) {
@@ -54,6 +70,66 @@ std::vector<float> render(InstrumentAudioProcessor& processor, int blocks,
         last.assign(buffer.getReadPointer(0), buffer.getReadPointer(0) + kBlockSize);
     }
     return last;
+}
+
+bool renderCapture(const RenderOptions& options) {
+    if (options.capturePath.empty() || options.sampleRate < 8'000.0 ||
+        options.durationSeconds <= 0.0 || options.note < 0 || options.note > 127 ||
+        options.noteOnSeconds < 0.0 || options.noteOffSeconds <= options.noteOnSeconds ||
+        options.noteOffSeconds >= options.durationSeconds || options.velocity <= 0.0f ||
+        options.velocity > 1.0f) {
+        std::fprintf(stderr, "invalid capture options\n");
+        return false;
+    }
+
+    constexpr int blockSize = 512;
+    const auto totalFrames = static_cast<std::int64_t>(std::ceil(options.durationSeconds * options.sampleRate));
+    const auto noteOnFrame = static_cast<std::int64_t>(std::llround(options.noteOnSeconds * options.sampleRate));
+    const auto noteOffFrame = static_cast<std::int64_t>(std::llround(options.noteOffSeconds * options.sampleRate));
+
+    InstrumentAudioProcessor processor;
+    processor.setPlayConfigDetails(0, 2, options.sampleRate, blockSize);
+    processor.setNonRealtime(true);
+    processor.prepareToPlay(options.sampleRate, blockSize);
+
+    juce::WavAudioFormat wavFormat;
+    auto fileStream = std::make_unique<juce::FileOutputStream>(juce::File(options.capturePath));
+    if (!fileStream->openedOk()) {
+        std::fprintf(stderr, "cannot open output WAV: %s\n", options.capturePath.c_str());
+        return false;
+    }
+    std::unique_ptr<juce::OutputStream> stream = std::move(fileStream);
+    auto writer = wavFormat.createWriterFor(
+        stream, juce::AudioFormatWriterOptions{}.withSampleRate(options.sampleRate)
+                   .withNumChannels(2).withBitsPerSample(24));
+    if (writer == nullptr) {
+        std::fprintf(stderr, "cannot create PCM WAV writer: %s\n", options.capturePath.c_str());
+        return false;
+    }
+
+    juce::AudioBuffer<float> buffer(2, blockSize);
+    juce::MidiBuffer midi;
+    for (std::int64_t frame = 0; frame < totalFrames; frame += blockSize) {
+        const int framesThisBlock = static_cast<int>(std::min<std::int64_t>(blockSize, totalFrames - frame));
+        midi.clear();
+        if (frame <= noteOnFrame && noteOnFrame < frame + framesThisBlock)
+            midi.addEvent(juce::MidiMessage::noteOn(1, options.note, options.velocity),
+                          static_cast<int>(noteOnFrame - frame));
+        if (frame <= noteOffFrame && noteOffFrame < frame + framesThisBlock)
+            midi.addEvent(juce::MidiMessage::noteOff(1, options.note),
+                          static_cast<int>(noteOffFrame - frame));
+
+        processor.processBlock(buffer, midi);
+        if (!writer->writeFromAudioSampleBuffer(buffer, 0, framesThisBlock)) {
+            writer.reset();
+            std::fprintf(stderr, "failed while writing capture WAV: %s\n", options.capturePath.c_str());
+            return false;
+        }
+    }
+
+    writer.reset();
+    processor.releaseResources();
+    return true;
 }
 
 void testAudio() {
@@ -342,8 +418,52 @@ void testEstadoYMatriz() {
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     juce::ScopedJuceInitialiser_GUI juceInitialiser;
+
+    if (argc > 1 && std::string(argv[1]) == "--render-capture") {
+        RenderOptions options;
+        for (int index = 2; index < argc; ++index) {
+            const std::string flag(argv[index]);
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "missing value for %s\n", flag.c_str());
+                return 2;
+            }
+            const char* value = argv[++index];
+            char* end = nullptr;
+            if (flag == "--output") {
+                options.capturePath = value;
+            } else if (flag == "--sample-rate") {
+                options.sampleRate = std::strtod(value, &end);
+                if (end == value || *end != '\0') return 2;
+            } else if (flag == "--duration") {
+                options.durationSeconds = std::strtod(value, &end);
+                if (end == value || *end != '\0') return 2;
+            } else if (flag == "--note") {
+                const auto parsed = std::strtol(value, &end, 10);
+                if (end == value || *end != '\0' || parsed < 0 || parsed > 127) return 2;
+                options.note = static_cast<int>(parsed);
+            } else if (flag == "--note-on") {
+                options.noteOnSeconds = std::strtod(value, &end);
+                if (end == value || *end != '\0') return 2;
+            } else if (flag == "--note-off") {
+                options.noteOffSeconds = std::strtod(value, &end);
+                if (end == value || *end != '\0') return 2;
+            } else if (flag == "--velocity") {
+                options.velocity = static_cast<float>(std::strtod(value, &end));
+                if (end == value || *end != '\0') return 2;
+            } else {
+                std::fprintf(stderr, "unknown capture option: %s\n", flag.c_str());
+                return 2;
+            }
+        }
+        try {
+            return renderCapture(options) ? 0 : 1;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "capture failed: %s\n", error.what());
+            return 1;
+        }
+    }
 
     testAudio();
     testMatrixDisparaYTransmite();

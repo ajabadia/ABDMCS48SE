@@ -7,7 +7,11 @@
 // Vite empaqueta este import junto al JavaScript y emite assets/index.css,
 // que el index.html del dist referencia solo. El provider nativo no conoce
 // rutas de fuentes: sirve lo que salio del build.
-import './main.css';
+import './style.css';
+
+// Componentes compartidos de ABDShared
+import { createSynthNavBar, AboutDialog, createAboutDialog, VuMeter } from '@abdsynths/shared/components';
+import { createDrawer } from '@abdsynths/shared/components';
 
 // Keybed estandar de ABDSynths: el mismo componente que monta ABDMS2000.
 // Vite lo resuelve contra el checkout hermano de ABDShared (ver vite.config.js).
@@ -369,13 +373,209 @@ import '@abdsynths/midi-keyb/keyboard.css';
   }
   setupKeyboard();
   bindParameters();
-  bindTransport();
+
+  // Montar componentes ABDShared
+  try {
+    const navContainer = document.getElementById('navBarContainer');
+    if (navContainer) {
+      const presetBarHtml = `
+        <div id="presetBar" class="synth-preset-bar">
+          <label class="preset-name-label">Preset
+            <input id="preset-name" type="text" value="Init" spellcheck="false">
+          </label>
+          <select id="preset-list" aria-label="Presets guardados"></select>
+          <button id="preset-save" type="button" class="btn btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Guardar
+          </button>
+          <button id="preset-load" type="button" class="btn btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 9l-5 5-5-5M12 12.8V2.5"></path></svg>
+            Cargar
+          </button>
+        </div>
+      `;
+
+      createSynthNavBar({
+        container: navContainer,
+        brand: { title: 'BDMCS48SE', subtitle: 'MCS-48 Instrument' },
+        centerSlot: presetBarHtml,
+        menus: [
+          {
+            name: 'File',
+            items: [
+              { label: 'Panic (All Notes Off)', action: 'panic' },
+              { label: 'Reset Machine', action: 'resetMachine' },
+              { label: 'Save Preset', action: 'savePreset' },
+              { label: 'Load Preset', action: 'loadPreset' },
+            ]
+          },
+          {
+            name: 'View',
+            items: [
+              { label: 'Toggle Theme', action: 'toggleTheme' },
+              { label: 'Toggle Virtual Keyboard (Ctrl+K)', action: 'toggleKeyboardDrawer' },
+            ]
+          },
+          {
+            name: 'Help',
+            items: [
+              { label: 'About BDMCS48SE...', action: 'about' },
+            ]
+          }
+        ],
+        actions: {
+          panic: () => {
+            callNative('allNotesOff').catch(() => {});
+            callNative('getState').then((json) => renderState(JSON.parse(json)));
+          },
+          resetMachine: () => {
+            callNative('resetMachine').then(() => callNative('getState')).then((json) => renderState(JSON.parse(json)));
+          },
+          savePreset: () => {
+            const name = document.getElementById('preset-name')?.value.trim() || '';
+            callNative('savePreset', name).then((error) => {
+              showFault(error ? String(error) : '');
+              return callNative('getState');
+            }).then((json) => renderState(JSON.parse(json)));
+          },
+          loadPreset: () => {
+            const name = document.getElementById('preset-list')?.value || '';
+            if (!name) return;
+            callNative('loadPreset', name).then((error) => {
+              showFault(error ? String(error) : '');
+              const input = document.getElementById('preset-name');
+              if (input) input.value = name;
+              return callNative('getState');
+            }).then((json) => renderState(JSON.parse(json)));
+          },
+          toggleTheme: () => {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme') || 'audiolab';
+            const next = current === 'audiolab-light' ? 'audiolab' : 'audiolab-light';
+            html.setAttribute('data-theme', next);
+            document.body.setAttribute('data-theme', next);
+            document.body.className = `theme-${next} skin-${next} chassis`;
+          },
+          toggleKeyboardDrawer: () => {
+            if (window.__bdmcs48_kbDrawer) {
+              window.__bdmcs48_kbDrawer.toggle();
+            }
+          },
+          about: () => {
+            try {
+              const dlg = createAboutDialog({
+                name: 'BDMCS48SE Instrument',
+                version: '0.1.0',
+                build: 'pilot',
+                description: 'MCS-48 based monophonic instrument'
+              });
+              dlg.open();
+            } catch (e) {
+              console.warn('About dialog failed:', e);
+            }
+          }
+        },
+        rightSlot: `<span id="firmwareStatusPill" class="navbar-pill">MCS-48</span>`
+      });
+
+      // Bind preset buttons after navbar injection
+      setTimeout(() => {
+        const saveBtn = document.getElementById('preset-save');
+        const loadBtn = document.getElementById('preset-load');
+        if (saveBtn) {
+          saveBtn.addEventListener('click', () => {
+            const name = document.getElementById('preset-name')?.value.trim() || '';
+            callNative('savePreset', name).then((error) => {
+              showFault(error ? String(error) : '');
+              return callNative('getState');
+            }).then((json) => renderState(JSON.parse(json)));
+          });
+        }
+        if (loadBtn) {
+          loadBtn.addEventListener('click', () => {
+            const name = document.getElementById('preset-list')?.value || '';
+            if (!name) return;
+            callNative('loadPreset', name).then((error) => {
+              showFault(error ? String(error) : '');
+              const input = document.getElementById('preset-name');
+              if (input) input.value = name;
+              return callNative('getState');
+            }).then((json) => renderState(JSON.parse(json)));
+          });
+        }
+      }, 0);
+    }
+  } catch (e) {
+    console.warn('SynthNavBar init failed:', e);
+  }
+
+  try {
+    const vuContainer = document.getElementById('vuMeterMaster');
+    if (vuContainer) {
+      const vuMeter = new VuMeter(vuContainer, { channels: 2, orientation: 'vertical' });
+      window.__bdmcs48_vuMeter = vuMeter;
+    }
+  } catch (e) {
+    console.warn('VuMeter init failed:', e);
+  }
+
+  // VirtualKeyboardDrawer en la base
+  try {
+    const kbMount = document.getElementById('virtualKeyboardDrawerMount');
+    if (kbMount) {
+      const drawer = createDrawer({ id: 'virtualKeyboardDrawer', title: 'Teclado Virtual' });
+      let kbDiv = document.getElementById('piano-keyboard');
+      if (!kbDiv) {
+        kbDiv = document.createElement('div');
+        kbDiv.id = 'piano-keyboard';
+      }
+      kbDiv.style.height = '155px';
+      drawer.body.appendChild(kbDiv);
+      createKeyboard({
+        containerId: 'piano-keyboard',
+        onNoteOn: (note, velocity) => callNative('noteOn', note, velocity),
+        onNoteOff: (note) => callNative('noteOff', note),
+        onPanic: () => callNative('allNotesOff'),
+        config: {
+          numOctaves: 2,
+          startNote: 48,
+          fixedOctaves: true,
+          maxOctaveShift: 0,
+          enableQwerty: true,
+          enableAccessibility: true,
+          enableHold: false,
+          enableRetrig: false,
+        }
+      });
+      window.__bdmcs48_kbDrawer = drawer;
+      // Abrir con Ctrl+K
+      window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+          const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+          if (tag === 'input' || tag === 'textarea') return;
+          e.preventDefault();
+          if (window.__bdmcs48_kbDrawer) {
+            window.__bdmcs48_kbDrawer.toggle();
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Keyboard drawer init failed:', e);
+  }
 
   backend.addEventListener("bdmcs48-state", (json) => {
     if (typeof json === "string") {
       renderState(JSON.parse(json));
     } else if (json) {
       renderState(json);
+    }
+    if (window.__bdmcs48_vuMeter && json) {
+      try {
+        const state = typeof json === 'string' ? JSON.parse(json) : json;
+        const level = state.engine?.level || 0;
+        window.__bdmcs48_vuMeter.setLevels({ left: level * 0.9, right: level * 1.0 });
+      } catch (e) {}
     }
   });
 

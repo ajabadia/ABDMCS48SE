@@ -4,91 +4,84 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BDMCS48SE Instrument</title>
-  <!-- Entrada de Vite: el CSS entra por el import de src/main.js, asi que el
-       bundle sale como assets/index.js + assets/index.css. El documento final
-       lo genera `node Scripts/build_webui.js` en WebUI/dist. -->
+  <!-- Entrada de Vite: el CSS entra por el import de src/main.js -->
   <script type="module" src="/src/main.js"></script>
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">BDMCS48SE</span>
-      <span class="firmware" id="firmware">firmware…</span>
-      <span class="hash" id="firmware-hash"></span>
+<body data-theme="audiolab" class="theme-audiolab skin-audiolab chassis">
+  <!-- Barra de navegación universal ABDShared -->
+  <div id="navBarContainer"></div>
+
+  <main class="synth-canvas">
+    <!-- Columna Izquierda: Motor de Síntesis y Matriz de Comandos -->
+    <div class="canvas-col-left">
+      <section class="panel params" aria-labelledby="params-title">
+        <h2 id="params-title">Controles del Motor</h2>
+        <div class="param">
+          <label for="gain">Gain <output id="gain-value">-6.0 dB</output></label>
+          <input id="gain" type="range" min="-24" max="6" step="0.1" value="-6">
+        </div>
+        <div class="param">
+          <label for="release">Release <output id="release-value">80 ms</output></label>
+          <input id="release" type="range" min="10" max="500" step="1" value="80">
+        </div>
+        <p class="hint">Los parámetros van al APVTS del plugin: se automatizan y se guardan con el proyecto.</p>
+      </section>
+
+      <section class="panel matrix" aria-labelledby="matrix-title">
+        <h2 id="matrix-title">Matriz de comandos</h2>
+        <p class="hint">Cada fila se dispara con su Note On. La probabilidad se decide al recibir la nota; el delay y la mutación se aplican al ejecutar.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">On</th>
+                <th scope="col">Nota</th>
+                <th scope="col">Destino</th>
+                <th scope="col">Valor</th>
+                <th scope="col">Prob.</th>
+                <th scope="col">Delay</th>
+                <th scope="col">Mutación</th>
+                <th scope="col">Paso</th>
+              </tr>
+            </thead>
+            <tbody id="matrix-body"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
-    <div class="transport">
-      <label class="preset-name">Preset
-        <input id="preset-name" type="text" value="Init" spellcheck="false">
-      </label>
-      <button id="preset-save" type="button">Guardar</button>
-      <select id="preset-list" aria-label="Presets guardados"></select>
-      <button id="preset-load" type="button">Cargar</button>
-      <button id="panic" type="button" class="danger">Panic</button>
+
+    <!-- Columna Derecha: Diagnóstico LCD y Medición Master -->
+    <div class="canvas-col-right">
+      <section class="panel lcd-panel" aria-labelledby="status-title">
+        <h2 id="status-title">Telemetría MCS-48</h2>
+        <div class="lcd-container">
+          <div class="lcd-grid">
+            <div class="lcd-cell"><span class="lcd-label">PC</span><span class="lcd-value" id="st-pc">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">A</span><span class="lcd-value" id="st-a">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">PSW</span><span class="lcd-value" id="st-psw">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Banco</span><span class="lcd-value" id="st-bank">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Ciclos</span><span class="lcd-value lcd-value-wide" id="st-cycles">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Nota</span><span class="lcd-value" id="st-note">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Nivel</span><span class="lcd-value" id="st-level">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Overruns</span><span class="lcd-value" id="st-overruns">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Underruns</span><span class="lcd-value" id="st-underruns">–</span></div>
+            <div class="lcd-cell"><span class="lcd-label">Comandos</span><span class="lcd-value lcd-value-wide" id="st-command">–</span></div>
+          </div>
+        </div>
+        <p class="fault" id="fault" hidden></p>
+      </section>
+
+      <section class="panel master-panel" aria-labelledby="master-title">
+        <h2 id="master-title">Master</h2>
+        <div id="vuMeterMaster" class="vumeter-tower"></div>
+      </section>
     </div>
-  </header>
-
-  <main>
-    <section class="panel params" aria-labelledby="params-title">
-      <h2 id="params-title">Salida</h2>
-      <div class="param">
-        <label for="gain">Gain <output id="gain-value">-6.0 dB</output></label>
-        <input id="gain" type="range" min="-24" max="6" step="0.1" value="-6">
-      </div>
-      <div class="param">
-        <label for="release">Release <output id="release-value">80 ms</output></label>
-        <input id="release" type="range" min="10" max="500" step="1" value="80">
-      </div>
-      <p class="hint">Los parámetros van al APVTS del plugin: se automatizan y se guardan con el proyecto.</p>
-    </section>
-
-    <section class="panel matrix" aria-labelledby="matrix-title">
-      <h2 id="matrix-title">Matriz de comandos</h2>
-      <p class="hint">Cada fila se dispara con su Note On. La probabilidad se decide al recibir la nota; el delay y la mutación se aplican al ejecutar.</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">On</th>
-              <th scope="col">Nota</th>
-              <th scope="col">Destino</th>
-              <th scope="col">Valor</th>
-              <th scope="col">Prob.</th>
-              <th scope="col">Delay</th>
-              <th scope="col">Mutación</th>
-              <th scope="col">Paso</th>
-            </tr>
-          </thead>
-          <tbody id="matrix-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel status" aria-labelledby="status-title">
-      <h2 id="status-title">Estado</h2>
-      <dl class="status-grid">
-        <div><dt>PC</dt><dd id="st-pc">–</dd></div>
-        <div><dt>A</dt><dd id="st-a">–</dd></div>
-        <div><dt>PSW</dt><dd id="st-psw">–</dd></div>
-        <div><dt>Banco</dt><dd id="st-bank">–</dd></div>
-        <div><dt>Ciclos</dt><dd id="st-cycles">–</dd></div>
-        <div><dt>Nota</dt><dd id="st-note">–</dd></div>
-        <div><dt>Nivel</dt><dd id="st-level">–</dd></div>
-        <div><dt>Overruns</dt><dd id="st-overruns">–</dd></div>
-        <div><dt>Underruns</dt><dd id="st-underruns">–</dd></div>
-        <div><dt>Comandos</dt><dd id="st-command">–</dd></div>
-      </dl>
-      <p class="fault" id="fault" hidden></p>
-    </section>
   </main>
 
-  <!-- El keybed va al fondo, a todo el ancho: es la superficie de juego y se
-       queda fija mientras el contenido de arriba hace scroll. -->
-  <section class="panel keyboard" aria-labelledby="keyboard-title">
-    <h2 id="keyboard-title">Teclado</h2>
-    <!-- Keybed compartido de ABDShared (@abdsynths/midi-keyb): lo monta
-         main.js. El host fija la altura, que es el contrato del componente. -->
+  <!-- VirtualKeyboardDrawer - Teclado de piano virtual desplegable -->
+  <div id="virtualKeyboardDrawerMount">
     <div id="piano-keyboard"></div>
-  </section>
+  </div>
 
 </body>
 </html>

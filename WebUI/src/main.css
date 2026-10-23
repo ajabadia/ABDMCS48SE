@@ -28,50 +28,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 14px 14px;
-  /* La ventana no scrollea entera: el teclado queda fijo al fondo y arriba
-     solo se desplaza el contenido. */
+  padding: 0 0 0;
+  /* La ventana no scrollea entera: el teclado queda fijo al fondo */
   overflow: hidden;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+#navBarContainer {
+  flex-shrink: 0;
 }
 
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.logo {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-}
-
-.firmware {
-  color: var(--ink);
-}
-
-.hash {
-  color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 11px;
-}
-
-.transport {
+.synth-preset-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.preset-name {
+.preset-name-label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -106,18 +79,47 @@ button.danger:hover {
   color: #ffd7d5;
 }
 
-main {
-  /* Ocupa el alto restante y hace su propio scroll; el keybed no se mueve. */
+.btn.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.navbar-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-edge);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.synth-canvas {
+  /* Ocupa el alto restante */
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: minmax(220px, 260px) 1fr;
-  grid-template-areas:
-    "params matrix"
-    "status matrix";
+  grid-template-columns: 2fr 1fr;
   gap: 10px;
   align-items: start;
+  padding: 0 10px 10px;
+}
+
+.canvas-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.canvas-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 .panel {
@@ -136,16 +138,57 @@ main {
   color: var(--muted);
 }
 
-.params {
-  grid-area: params;
+.lcd-panel .lcd-container {
+  background: radial-gradient(ellipse at center, #102a16 0%, #07130a 100%);
+  border: 1px solid #1a3820;
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: inset 0 0 20px rgba(0, 255, 128, 0.05);
 }
 
-.matrix {
-  grid-area: matrix;
+.lcd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
 }
 
-.status {
-  grid-area: status;
+.lcd-cell {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px dotted rgba(0, 255, 128, 0.25);
+  padding: 3px 0;
+}
+
+.lcd-label {
+  color: #4dff9d;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lcd-value {
+  color: #7dffb3;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(0, 255, 128, 0.25);
+}
+
+.lcd-value-wide {
+  grid-column: span 1;
+}
+
+.master-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vumeter-tower {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .hint {
@@ -250,6 +293,39 @@ td .range-row output {
   height: 155px;
 }
 
+#piano-keyboard-drawer {
+  height: 155px !important;
+  min-height: 155px !important;
+  max-height: 155px !important;
+  flex-shrink: 0;
+}
+
+.vu-meter-container {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.vu-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: center;
+}
+
+#vuMeterMaster {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+button svg {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -281,12 +357,8 @@ td .range-row output {
   color: #ffc9c6;
 }
 
-@media (max-width: 900px) {
-  main {
+@media (max-width: 1100px) {
+  .synth-canvas {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "params"
-      "matrix"
-      "status";
   }
 }
