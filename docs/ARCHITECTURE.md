@@ -123,6 +123,22 @@ JUCE Editor / AudioProcessor
 
 El hilo de audio no realiza operaciones de filesystem, bloqueos, logging, allocations no acotadas ni llamadas a WebView/GUI. La estrategia concreta de cola, snapshot, buffers y desbordamiento debe probarse y documentarse antes de declararse lock-free o thread-safe.
 
+### Contrato temporal (implementado)
+
+`MachineInstance::runBlock` avanza la máquina hasta un límite **absoluto** de
+ciclos de CPU (`cycleOffset_ + CoreClock::totalCycles()`), no "una
+instrucción por muestra". `Mcs48Cpu::runCycles` redondea hacia arriba hasta
+acabar la instrucción en curso; comparar contra el contador del CPU arrastra
+esa diferencia a la muestra siguiente y mantiene la media exacta. Sin esto la
+CPU corría hasta un 10 % más rápido que su reloj y la afinación dependía de
+la escala de reloj elegida.
+
+Los parámetros y las entradas se consumen de la cola al principio de cada
+llamada a `renderBlock`; el host que necesita precisión sub-bloque parte el
+bloque en los offsets de sus eventos (lo hace el processor JUCE con el MIDI).
+El resultado es que un evento a mitad de bloque se aplica en el límite de
+segmento, no al principio del bloque entero.
+
 ### Contrato JUCE WebView
 
 - Acciones frontend → C++: funciones nativas concretas registradas con `withNativeFunction`, invocadas mediante la API JUCE de frontend; C++ valida tipos/rangos/estado y despacha por el canal de host adecuado.

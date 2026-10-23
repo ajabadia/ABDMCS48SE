@@ -11,6 +11,7 @@ constexpr std::uint8_t kRegisterBank1 = 0x18;
 
 // La pila ocupa 8 niveles de 2 bytes en 0x08-0x17.
 constexpr std::uint8_t kStackBase = 0x08;
+constexpr std::uint8_t kStackLevels = 8;
 
 constexpr std::uint16_t kAddressMask = 0x0fff;
 constexpr std::uint16_t kSequentialMask = 0x07ff;
@@ -40,7 +41,8 @@ Mcs48Cpu::Mcs48Cpu(ProgramMemory& program, PortBus* bus,
 void Mcs48Cpu::reset() {
     ram_.assign(config_.ramSize, 0);
     state_ = Mcs48State{};
-    timerRegister_ = 0;
+    timer_.reset();
+    stackDepth_ = 0;
     fault_ = CpuFault::None;
     faultMessage_.clear();
 }
@@ -126,27 +128,45 @@ void Mcs48Cpu::executeJcc(bool condition) {
 }
 
 void Mcs48Cpu::pushPcPsw() {
+    if (stackDepth_ >= kStackLevels) {
+        // El hardware real no lo detecta: el puntero de 3 bits da la vuelta y
+        // sobrescribe el nivel mas antiguo. Un CALL con la pila llena es un
+        // error de firmware y aqui se detiene la CPU.
+        raiseFault(CpuFault::StackOverflow, "CALL con los 8 niveles de pila ocupados");
+        return;
+    }
     const std::uint8_t sp = static_cast<std::uint8_t>(state_.psw & 0x07);
     writeRam(static_cast<std::uint8_t>(kStackBase + 2 * sp), static_cast<std::uint8_t>(state_.pc & 0xff));
     writeRam(static_cast<std::uint8_t>(kStackBase + 2 * sp + 1),
              static_cast<std::uint8_t>(((state_.pc >> 8) & 0x0f) | (state_.psw & 0xf0)));
     state_.psw = static_cast<std::uint8_t>((state_.psw & 0xf0) | ((sp + 1) & 0x07));
+    ++stackDepth_;
 }
 
 void Mcs48Cpu::pullPc() {
+    if (stackDepth_ == 0) {
+        raiseFault(CpuFault::StackUnderflow, "RET sin ningun retorno pendiente en la pila");
+        return;
+    }
     const std::uint8_t sp = static_cast<std::uint8_t>((state_.psw - 1) & 0x07);
     std::uint16_t pc = readRam(static_cast<std::uint8_t>(kStackBase + 2 * sp));
     pc = static_cast<std::uint16_t>(pc | (readRam(static_cast<std::uint8_t>(kStackBase + 2 * sp + 1)) << 8));
     state_.pc = static_cast<std::uint16_t>(pc & kAddressMask);
     state_.psw = static_cast<std::uint8_t>((state_.psw & 0xf0) | sp);
+    --stackDepth_;
 }
 
 void Mcs48Cpu::pullPcPsw() {
+    if (stackDepth_ == 0) {
+        raiseFault(CpuFault::StackUnderflow, "RETR sin ningun retorno pendiente en la pila");
+        return;
+    }
     const std::uint8_t sp = static_cast<std::uint8_t>((state_.psw - 1) & 0x07);
     std::uint16_t pc = readRam(static_cast<std::uint8_t>(kStackBase + 2 * sp));
     pc = static_cast<std::uint16_t>(pc | (readRam(static_cast<std::uint8_t>(kStackBase + 2 * sp + 1)) << 8));
     state_.psw = static_cast<std::uint8_t>(((pc >> 8) & 0xf0) | sp);
     state_.pc = static_cast<std::uint16_t>(pc & kAddressMask);
+    --stackDepth_;
 }
 
 void Mcs48Cpu::executeCall(std::uint16_t address) {
@@ -186,7 +206,13 @@ void Mcs48Cpu::executeXrl(std::uint8_t value) {
 }
 
 void Mcs48Cpu::execute(std::uint8_t opcode) {
-    const auto burn = [this](std::uint64_t cycles) { state_.cycles += cycles; };
+    // Cada ciclo de maquina hace avanzar el prescaler del temporizador.
+    const auto burn = [this](std::uint64_t cycles) {
+        state_.cycles += cycles;
+        for (std::uint64_t i = 0; i < cycles; ++i) {
+            timer_.tick();
+        }
+    };
 
     // --- Familias contiguas Rn --------------------------------------------
     if (opcode >= 0x18 && opcode <= 0x1f) { // INC R0..R7
@@ -262,9 +288,13 @@ void Mcs48Cpu::execute(std::uint8_t opcode) {
     case 0x00: // NOP
         burn(1);
         break;
-    case 0x05: // EN I (sin interrupciones en v1: no hace nada)
+    case 0x05: // EN I
     case 0x15: // DIS I
-        burn(1);
+        // Sin modelo de interrupciones, habilitarlas o deshabilitarlas no
+        // puede simularse: se avisa en lugar de fingir que se ha hecho.
+        raiseFault(CpuFault::UnsupportedFeature,
+                   "las interrupciones del MCS-48 no estan implementadas (opcode " +
+                       toHex(opcode) + ")");
         break;
 
     // --- Acumulador y registros ------------------------------------------
@@ -327,22 +357,37 @@ void Mcs48Cpu::execute(std::uint8_t opcode) {
         burn(1);
         break;
     }
-    case 0x42: // MOV A,T (el temporizador no avanza en v1: T queda a 0)
-        state_.accumulator = timerRegister_;
+    case 0x42: // MOV A,T
+        state_.accumulator = timer_.counter();
         burn(1);
         break;
     case 0x62: // MOV T,A
-        timerRegister_ = state_.accumulator;
+        timer_.setCounter(state_.accumulator);
+        burn(1);
+        break;
+    case 0x45: // STRT CNT
+        timer_.startCounter();
+        burn(1);
+        break;
+    case 0x55: // STRT T
+        timer_.startTimer();
+        burn(1);
+        break;
+    case 0x65: // STOP TCNT
+        timer_.stop();
         burn(1);
         break;
     case 0xc7: // MOV A,PSW
         state_.accumulator = static_cast<std::uint8_t>(state_.psw | 0x08);
         burn(1);
         break;
-    case 0xa7: // MOV PSW,A
-    case 0xd7: // MOV PSW,A
+    case 0xd7: // MOV PSW,A (0xA7 NO es MOV PSW,A: es CPL C)
         state_.psw = static_cast<std::uint8_t>(state_.accumulator & ~0x08);
         updateRegisterBank();
+        burn(1);
+        break;
+    case 0xa7: // CPL C
+        state_.psw = static_cast<std::uint8_t>(state_.psw ^ kCarryFlag);
         burn(1);
         break;
     case 0x85: // CLR F0
@@ -655,8 +700,6 @@ void Mcs48Cpu::execute(std::uint8_t opcode) {
         burn(2);
         break;
     case 0x76: // JF1 (sin pin F1 en v1: nunca se cumple)
-    case 0x86: // JNI (sin interrupciones en v1: nunca se cumple)
-    case 0x16: // JTF (sin temporizador en v1: nunca se cumple)
     case 0x36: // JT 0 (sin pin de test en v1: nunca se cumple)
     case 0x56: // JT 1
         executeJcc(false);
@@ -705,15 +748,19 @@ void Mcs48Cpu::execute(std::uint8_t opcode) {
         burn(1);
         break;
 
-    // --- Temporizador: no implementado en v1 -------------------------------
+    // --- Temporizador: contador modelado, interrupciones no ---------------
     case 0x25: // EN TCNTI
     case 0x35: // DIS TCNTI
-    case 0x45: // STRT CNT
-    case 0x55: // STRT T
-    case 0x65: // STOP TCNT
     case 0x75: // ENT0 CLK
+    case 0x86: // JNI
+    case 0x16: // JTF (saltaria segun el flag TF de Mcs48Timer)
+        // El contador y su flag existen, pero despachar una interrupcion o
+        // saltar por el flag exige el modelo de interrupciones, que no esta
+        // implementado. Fallar aqui evita que el firmware crea que ha
+        // consultado el flag cuando no lo ha hecho.
         raiseFault(CpuFault::UnsupportedFeature,
-                   "el temporizador del MCS-48 no esta implementado (opcode " + toHex(opcode) + ")");
+                   "las interrupciones del temporizador no estan implementadas (opcode " +
+                       toHex(opcode) + ")");
         break;
 
     default:

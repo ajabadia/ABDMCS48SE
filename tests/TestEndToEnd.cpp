@@ -1,8 +1,5 @@
 #include "TestFramework.h"
 
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +10,7 @@
 #include "firmware/PackageLoader.h"
 #include "firmware/demo/DemoFirmware.h"
 #include "host/DiagnosticsProtocol.h"
+#include "host/HttpClient.h"
 #include "host/HttpServer.h"
 #include "host/MachineHost.h"
 #include "machines/MachineFactory.h"
@@ -40,14 +38,20 @@ public:
 
     std::string profileId() const override { return "stub"; }
     void reset() override {}
-    void setParameter(std::uint32_t, float) override {}
-    void writeInput(std::uint32_t, float) override {}
+    void setParameter(std::uint32_t id, float value) override {
+        parameters.emplace_back(id, value);
+    }
+    void writeInput(std::uint32_t id, float value) override {
+        inputs.emplace_back(id, value);
+    }
     void runBlock(std::uint32_t, float* const*, std::uint32_t) override {}
-    EngineStatus status() override { return EngineStatus{}; }
-    std::uint64_t retiredPending() const override { return 0; }
-    void drainRetired() override {}
+    bdmcs48::core::EngineStatus status() const override { return bdmcs48::core::EngineStatus{}; }
 
     int id() const { return id_; }
+
+    // Lo que la maquina ha recibido del hilo de audio.
+    std::vector<std::pair<std::uint32_t, float>> parameters;
+    std::vector<std::pair<std::uint32_t, float>> inputs;
 
 private:
     int id_ = 0;
@@ -174,28 +178,128 @@ TEST(EndToEnd, HotSwapEnElLimiteDeBloque) {
     bdmcs48::host::MachineHost host({44'100, 64});
     CHECK(host.loadPackage(dir, error));
 
-    auto first = std::make_unique<StubMachine>(1);
-    CHECK(host.publishMachine(std::move(first)));
-
-    // El primer bloque: la maquina nueva se instala.
+    // loadPackage deja la maquina del paquete pendiente: se instala en el
+    // primer limite de bloque.
     std::vector<float> buffer(64, 0.0f);
     float* outputs[1] = {buffer.data()};
     host.renderBlock(64, outputs, 1);
-    CHECK_EQ(gAlive, 1);
     CHECK(host.hotSwaps() == 1);
+    host.service(); // no hay nada retirado todavia
 
-    // El segundo bloque: la segunda maquina entra en caliente; la primera
+    auto first = std::make_unique<StubMachine>(1);
+    CHECK(host.publishMachine(std::move(first)));
+
+    // El segundo bloque: la maquina nueva sustituye a la del paquete.
+    host.renderBlock(64, outputs, 1);
+    CHECK_EQ(gAlive, 1);
+    CHECK(host.hotSwaps() == 2);
+    // La maquina del paquete ya no suena y la destruye el hilo de control.
+    CHECK(host.service() == 1);
+
+    // El tercer bloque: la segunda maquina entra en caliente; la primera
     // se retira y no se destruye hasta que el hilo de control la drena.
     auto second = std::make_unique<StubMachine>(2);
     CHECK(host.publishMachine(std::move(second)));
     host.renderBlock(64, outputs, 1);
     CHECK_EQ(gAlive, 2);
-    CHECK(host.hotSwaps() == 1);
+    CHECK_EQ(gDestroyed, 0);
+    CHECK(host.hotSwaps() == 3);
 
     // Drenar: la maquina retirada se destruye aqui, no en el audio.
     CHECK(host.service() == 1);
     CHECK_EQ(gDestroyed, 1);
     CHECK_EQ(gAlive, 1);
+}
+
+TEST(EndToEnd, LosComandosLleganALaMaquinaActiva) {
+    gAlive = 0;
+    gDestroyed = 0;
+
+    bdmcs48::host::MachineHost host({44'100, 64});
+    auto machine = std::make_unique<StubMachine>(1);
+    StubMachine* raw = machine.get();
+    CHECK(host.publishMachine(std::move(machine)));
+
+    // Los ids >= 0x1000 son parametros del perfil; el resto, entradas. El
+    // valor viaja como entero y el host lo normaliza a 0..1.
+    CHECK(host.postCommand(0x1000u + 3u, 32767));
+    CHECK(host.postCommand(0u, 16384));
+
+    std::vector<float> buffer(64, 0.0f);
+    float* outputs[1] = {buffer.data()};
+    host.renderBlock(64, outputs, 1); // instala y aplica los comandos
+
+    CHECK_EQ(raw->parameters.size(), std::size_t{1});
+    CHECK_EQ(raw->parameters[0].first, std::uint32_t{3});
+    CHECK_NEAR(raw->parameters[0].second, 1.0, 1e-6);
+
+    CHECK_EQ(raw->inputs.size(), std::size_t{1});
+    CHECK_EQ(raw->inputs[0].first, std::uint32_t{0});
+    CHECK_NEAR(raw->inputs[0].second, 0.5, 1e-3);
+
+    CHECK_EQ(host.droppedCommands(), std::uint64_t{0});
+}
+
+TEST(EndToEnd, LaColaDeComandosLlenaNoBloqueaElAudio) {
+    gAlive = 0;
+    gDestroyed = 0;
+
+    bdmcs48::host::MachineHost host({44'100, 64});
+    auto machine = std::make_unique<StubMachine>(1);
+    StubMachine* raw = machine.get();
+    CHECK(host.publishMachine(std::move(machine)));
+
+    const std::size_t capacity = host.commands().capacity();
+    CHECK(capacity > 0);
+
+    std::size_t accepted = 0;
+    for (std::size_t i = 0; i < capacity + 16; ++i) {
+        if (host.postCommand(0u, static_cast<std::int32_t>(i))) {
+            ++accepted;
+        }
+    }
+    CHECK_EQ(accepted, capacity);
+    CHECK_EQ(host.droppedCommands(), std::uint64_t{16});
+
+    // El hilo de audio no se bloquea ni pierde muestras: procesa el bloque y
+    // aplica solo lo que cabia.
+    std::vector<float> buffer(64, 0.0f);
+    float* outputs[1] = {buffer.data()};
+    host.renderBlock(64, outputs, 1);
+    CHECK_EQ(raw->inputs.size(), capacity);
+    CHECK_EQ(host.framesRendered(), std::uint64_t{64});
+}
+
+TEST(EndToEnd, RechazaUnSegundoCambioMientrasHayUnoPendiente) {
+    gAlive = 0;
+    gDestroyed = 0;
+    const std::string dir = gEnv.writtenDir();
+    std::string error;
+    CHECK(bdmcs48::firmware::demo::writeDemoPackage(dir, error));
+
+    bdmcs48::host::MachineHost host({44'100, 64});
+    CHECK(host.loadPackage(dir, error));
+
+    // El paquete ya deja una maquina pendiente: el host solo admite un
+    // cambio por limite de bloque y debe rechazar el segundo sin tocar el
+    // audio ni la maquina que ya suena.
+    auto extra = std::make_unique<StubMachine>(7);
+    MachineInstance* extraRaw = extra.get();
+    CHECK(!host.publishMachine(std::move(extra)));
+    CHECK_EQ(host.rejectedSwaps(), std::uint64_t{1});
+    CHECK_EQ(host.retiredPending(), std::size_t{0});
+    CHECK_EQ(gAlive, 0); // la rechazada se destruye en el hilo de control
+
+    // El primer bloque sigue instalando la maquina del paquete.
+    std::vector<float> buffer(64, 0.0f);
+    float* outputs[1] = {buffer.data()};
+    host.renderBlock(64, outputs, 1);
+    CHECK_EQ(host.hotSwaps(), std::uint64_t{1});
+    CHECK_EQ(gAlive, 0);
+
+    // La rechazada no se instala nunca.
+    (void)extraRaw;
+    CHECK_EQ(host.retiredPending(), std::size_t{0});
 }
 
 TEST(EndToEnd, ServidorHttpSirveElDiagnostico) {
@@ -221,64 +325,25 @@ TEST(EndToEnd, ServidorHttpSirveElDiagnostico) {
         }
         return false;
     }, serror));
-    CHECK(!serror.empty());
+    CHECK(serror.empty());
     CHECK(server.running());
 
-    // La consulta se hace por un socket: el archivo no depende del navegador.
-#if defined(_WIN32)
-    WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
-    const SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(server.port());
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-    connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-
-    std::string request = "GET /api/diagnostics HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    send(sock, request.data(), static_cast<int>(request.size()), 0);
-
+    // La consulta se hace por un socket real: el documento no depende del
+    // navegador y el cliente (que aisla winsock/POSIX) vive en host/.
     std::string answer;
-    char buffer[4096];
-    int received;
-    while ((received = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
-        answer.append(buffer, static_cast<std::size_t>(received));
-    }
-    closesocket(sock);
-    WSACleanup();
+    std::string clientError;
+    CHECK(bdmcs48::host::httpGet(server.port(), "/api/diagnostics", answer, clientError));
+    CHECK(clientError.empty());
 
     CHECK(answer.find("HTTP/1.1 200") != std::string::npos);
     CHECK(answer.find("bdmcs48se-diagnostics/1") != std::string::npos);
     CHECK(answer.find("\"firmware\"") != std::string::npos);
-#else
-    const int sock = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(server.port());
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-    connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-
-    std::string request = "GET /api/diagnostics HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    send(sock, request.data(), request.size(), 0);
-
-    std::string answer;
-    char buffer[4096];
-    ssize_t received;
-    while ((received = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
-        answer.append(buffer, static_cast<std::size_t>(received));
-    }
-    close(sock);
-
-    CHECK(answer.find("HTTP/1.1 200") != std::string::npos);
-    CHECK(answer.find("bdmcs48se-diagnostics/1") != std::string::npos);
-    CHECK(answer.find("\"firmware\"") != std::string::npos);
-#endif
 
     server.stop();
     CHECK(!server.running());
 }
 
-TEST(EndToEnd, SilencioInicialLuegoSeActivaElBucle) {
+TEST(EndToEnd, ElDacSuenaYaEnElPrimerBloque) {
     const std::string dir = gEnv.writtenDir();
     std::string error;
     CHECK(bdmcs48::firmware::demo::writeDemoPackage(dir, error));
@@ -286,18 +351,37 @@ TEST(EndToEnd, SilencioInicialLuegoSeActivaElBucle) {
     bdmcs48::host::MachineHost host({44'100, 64});
     CHECK(host.loadPackage(dir, error));
 
-    // Los primeros bloques no producen ruido: el bucle de demostracion
-    // necesita hasta 0x00A ciclos (banco 0) antes de escribir el primer
-    // valor en el DAC.
-    std::vector<float> buffer(64, 0.0f);
-    float* outputs[1] = {buffer.data()};
+    // Tres bloques bastan para que el programa recorra el retardo del banco
+    // 1 y escriba los dos niveles del DAC (0x5A y 0xC0).
+    std::vector<float> samples;
     for (int i = 0; i < 3; ++i) {
+        std::vector<float> buffer(64, 0.0f);
+        float* outputs[1] = {buffer.data()};
         host.renderBlock(64, outputs, 1);
         host.service();
+        samples.insert(samples.end(), buffer.begin(), buffer.end());
     }
-    const bdmcs48::core::EngineStatus status = host.status();
-    // En el estado actual el DAC aun no ha sido tocado.
-    CHECK_EQ(status.accumulator, std::uint8_t{0});
-}
 
-} // namespace
+    // La conversion del DAC es la misma que hace el perfil: asi la
+    // comparacion no depende de redondear a mano.
+    const auto level = [](std::uint8_t value) {
+        return (static_cast<float>(value) - 127.5f) / 127.5f;
+    };
+
+    // La CPU ejecuta el primer OUTL P1 (0x5A) antes de la primera muestra:
+    // el primer bloque ya no es silencio.
+    CHECK_EQ(samples.front(), level(0x5a));
+
+    bool sawLow = false;
+    bool sawHigh = false;
+    for (float sample : samples) {
+        if (sample == level(0x5a)) {
+            sawLow = true;
+        }
+        if (sample == level(0xc0)) {
+            sawHigh = true;
+        }
+    }
+    CHECK(sawLow);
+    CHECK(sawHigh);
+}

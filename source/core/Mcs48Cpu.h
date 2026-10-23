@@ -12,9 +12,12 @@
 //    ademas el PSW.
 //  * 1 ciclo de maquina = 15 oscilaciones del reloj.
 //
-// Los opcodes no implementados (temporizador, expansores, interrupciones)
-// producen un fallo explicito: la CPU se detiene en lugar de comportarse
-// como si hiciese algo.
+// El temporizador/contador (T, prescaler de 32, STRT/STOP, MOV A,T y
+// MOV T,A) esta modelado en Mcs48Timer y avanza con los ciclos de maquina.
+//
+// Los opcodes no implementados (expansores, interrupciones y el salto al
+// flag del temporizador) producen un fallo explicito: la CPU se detiene en
+// lugar de comportarse como si hiciese algo.
 
 #pragma once
 
@@ -24,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "core/Mcs48Timer.h"
 #include "core/ProgramMemory.h"
 
 namespace bdmcs48::core {
@@ -55,6 +59,7 @@ enum class CpuFault {
     IllegalOpcode,
     UnsupportedFeature,
     StackOverflow,
+    StackUnderflow,
 };
 
 struct Mcs48State {
@@ -120,6 +125,11 @@ public:
     std::uint32_t clocksPerCycle() const { return config_.clocksPerCycle; }
     std::size_t ramSize() const { return ram_.size(); }
 
+    // Temporizador/contador. El perfil de maquina inyecta los flancos de T1
+    // con timer().externalPulse() y el host puede leer el estado.
+    Mcs48Timer& timer() { return timer_; }
+    const Mcs48Timer& timer() const { return timer_; }
+
 private:
     std::uint8_t fetch();
     std::uint8_t fetchArgument();
@@ -148,7 +158,11 @@ private:
     Config config_{};
     std::vector<std::uint8_t> ram_;
     Mcs48State state_{};
-    std::uint8_t timerRegister_ = 0;
+    Mcs48Timer timer_;
+    // Niveles de pila ocupados. El hardware real solo tiene un puntero de 3
+    // bits que da la vuelta, asi que hace falta este contador para distinguir
+    // "pila llena" de "pila vacia" y poder avisar del error de firmware.
+    std::uint8_t stackDepth_ = 0;
     CpuFault fault_ = CpuFault::None;
     std::string faultMessage_;
 };

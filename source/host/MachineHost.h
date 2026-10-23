@@ -10,6 +10,7 @@
 #include "core/MachineExchange.h"
 #include "core/MachineInstance.h"
 #include "firmware/FirmwareTypes.h"
+#include "firmware/PackageLoader.h"
 #include "host/DiagnosticsProtocol.h"
 
 namespace bdmcs48::host {
@@ -34,6 +35,11 @@ public:
     // maquina. Si algo falla, la maquina activa sigue sonando: el error se
     // devuelve y no se toca el estado de audio.
     bool loadPackage(const std::string& packageRoot, std::string& error);
+
+    // Hilo de control: instala un paquete ya cargado en memoria (por ejemplo
+    // el firmware de demostracion). No toca el disco; las imagenes deben
+    // venir verificadas por quien las construye.
+    bool loadPackage(const firmware::LoadedPackage& package, std::string& error);
 
     // Hilo de control: publica una maquina ya construida.
     bool publishMachine(std::unique_ptr<core::MachineInstance> machine);

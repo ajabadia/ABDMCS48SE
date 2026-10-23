@@ -1,8 +1,8 @@
 # BDMCS48SE — Roadmap
 
-> **Estado:** planificación inicial. Ningún hito de implementación se marca como completado todavía.
+> **Estado:** implementación en curso (2026-10-22): core headless, firmware propio, host de referencia, esqueleto de plugin JUCE y CI multi-plataforma. El avance verificable está en «Estado actual».
 >
-> **Regla del proyecto:** durante la etapa actual recopilamos, contrastamos y documentamos información. No comenzamos a programar hasta que el usuario lo indique expresamente.
+> **Regla del proyecto:** un hito se marca como completado solo con evidencia verificable, y la evidencia debe decir qué plataformas o rutas siguen sin probar.
 
 ## Visión
 
@@ -28,7 +28,9 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - [x] Principio de aislamiento: la UI habla con el host JUCE, nunca directamente con el core; el hilo de audio no accede a la WebView.
 - [x] Política de distribución: el repositorio no incluye ROMs comerciales, no las solicita ni enlaza.
 - [ ] Ingeniería de requisitos y arquitectura: por completar con las decisiones de este roadmap.
-- [ ] Código, compilación, tests y prototipo: **no iniciados**.
+- [x] Código, compilación, tests y prototipo: core headless, firmware propio, host y esqueleto del plugin construidos. Evidencia: suite `bdmcs48_tests`, `docs/INSTRUMENT_SKELETON.md` y artefactos VST3/Standalone del 2026-10-22.
+- [x] **Portabilidad + CI preparado** (2026-10-22): CMake sin `CMAKE_CXX_COMPILER_FORCED` con las variables de MSVC dentro de `if(MSVC)`; sockets encapsulados en `source/host/HttpClient.*` y `source/host/HttpServer.*`; `TestEndToEnd` usa `httpGet` y ya no incluye cabeceras de Winsock; matriz Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang en `.github/workflows/ci.yml`.
+  **Validación:** el primer run de CI (PR #1) compiló y probó la rama POSIX sin cambios: las cuatro plataformas en verde, CTest 2/2 en cada una. La advertencia previa de «POSIX nunca compilado» ya no aplica, pero Windows fue lo único verificado también en Debug y con el plugin JUCE.
 
 ---
 
@@ -121,12 +123,14 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 
 **Objetivo:** conectar MIDI/DAW a la API del core sin depender todavía de WebView.
 
-- [ ] Definir adaptador `MachineHost`/instancia en el AudioProcessor sin filtrar tipos JUCE al SDK.
-- [ ] Implementar parámetros VST3/APVTS y traducción MIDI a eventos de máquina.
+- [x] Definir adaptador `MachineHost`/instancia en el AudioProcessor sin filtrar tipos JUCE al SDK. Evidencia: `source/plugin/PluginProcessor.*`; el core no incluye JUCE.
+- [x] Implementar parámetros VST3/APVTS y traducción MIDI a eventos de máquina. Evidencia: parámetros `gain`/`release` y nota MIDI → `engine_clock` en `MonoVoice`.
 - [ ] Integrar CLI/core en una ruta de render consistente con el plugin.
-- [ ] Establecer serialización de estado/presets con referencia y hash de ROM/profile, nunca con datos de ROM comercial incrustados.
-- [ ] Verificar carga, reset, audio y recuperación ante ROM ausente en Standalone y VST3.
-- [ ] Documentar requisitos de threading y ownership entre Processor, editor y máquina.
+- [ ] Establecer serialización de estado/presets con referencia y hash de ROM/profile, nunca con datos de ROM comercial incrustados. Parcial: se guardan gain, release y la ruta del firmware, sin hash.
+- [ ] Verificar carga, reset, audio y recuperación ante ROM ausente en Standalone y VST3. Parcial: VST3 y Standalone compilan y la prueba headless `plugin_smoke` valida MIDI y audio; falta abrirlos en un host real.
+- [x] Documentar requisitos de threading y ownership entre Processor, editor y máquina. Evidencia: `docs/INSTRUMENT_SKELETON.md` (el editor aún no existe).
+
+**Estado:** esqueleto técnico sin interfaz (2026-10-22). El camino MIDI → voz → reloj → firmware → audio está probado headless; la UI queda pendiente de instrucciones.
 
 **Criterio de salida:** plugin mínimo y CLI usan el mismo core, audio estable y parámetros/MIDI probados sin WebView.
 
@@ -176,7 +180,7 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 **Objetivo:** preparar releases cuando exista producto testeable y posición legal definida.
 
 - [ ] Confirmar decisión de licencia tras auditoría de MAME y firmware distribuidos.
-- [ ] Preparar CI/builds reproducibles para plataformas acordadas.
+- [ ] Preparar CI/builds reproducibles para plataformas acordadas. Parcial: matriz de cuatro plataformas en `.github/workflows/ci.yml`, en verde desde el primer run (PR #1); faltan builds de release, caché de dependencias y artefactos por plataforma.
 - [ ] Probar en DAWs/hosts objetivo, validar formato de plugin y reportar métricas de audio.
 - [ ] Documentar instalación, ROMs permitidas, perfiles propios, problemas y diagnóstico.
 - [ ] Añadir badges solo tras primer commit/build y valores verificables; no publicar badges de licencia hasta definir licencia.
@@ -210,3 +214,5 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 | Fecha | Hito | Evidencia / notas |
 |---|---|---|
 | 2026-10-21 | Visión inicial y restricciones reunidas | Información del usuario; pendientes de validación externa y decisiones abiertas. |
+| 2026-10-22 | Portabilidad + CI preparado (CI en verde en cuatro plataformas) | CMake portable y sockets aislados en `source/host/`; tests sin cabeceras de Winsock; matriz Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang en `.github/workflows/ci.yml`. Windows local: Debug y Release 119/119, CTest 2/2, benchmark de humo 512 muestras en 0,067 ms (~160× tiempo real). Primer run de CI: los cuatro trabajos en verde, CTest 2/2 en cada uno, sin cambios en la rama POSIX. |
+| 2026-10-22 | Esqueleto del instrumento monofónico (MIDI + JUCE, sin UI) | `docs/INSTRUMENT_SKELETON.md`; firmware de voz propio, voz monofónica, `engine_clock` corregido, ejecución de CPU hasta ciclos absolutos, liberación que no se alarga al repetir el parámetro, VST3 + Standalone con JUCE 9.0.4 y prueba `plugin_smoke`. |

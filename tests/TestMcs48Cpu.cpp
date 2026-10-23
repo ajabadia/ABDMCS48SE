@@ -114,31 +114,32 @@ TEST(Mcs48Cpu, SelMb1MasJmpCambiaDeBanco) {
 }
 
 TEST(Mcs48Cpu, ElSaltoCondicionalNoCambiaDePagina) {
-    // 0x800: SEL MB1
-    // 0x801: JZ 0x00   (con A = 0 el salto se cumple)
-    // Si el salto condicional respetase el flip-flop de banco, el PC
-    // Saltaria a 0x000. El modelo correcto lo deja en 0x800.
-    ProgramMemory program;
-    const std::uint8_t bank1[] = {0xf5, 0xc6, 0x00, 0x00};
+    // 0x000: SEL MB1 ; JMP 0x000  -> instala el flip-flop y salta a 0x800
+    // 0x800: JZ 0x00   (con A = 0 el salto se cumple)
+    // Si el salto condicional respetase el flip-flop de banco, el PC se iria
+    // a 0x000. El modelo correcto lo deja en 0x800: la pagina se conserva.
+    ProgramMemory program = makeProgram({0xf5, 0x04, 0x00});
+    const std::uint8_t bank1[] = {0xc6, 0x00, 0x00, 0x00};
     CHECK(program.loadBank(1, 0, bank1, sizeof(bank1)));
 
     RecordingBus bus;
     Mcs48Cpu cpu(program, &bus);
     cpu.step(); // SEL MB1
-    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x801});
-    cpu.step(); // JZ 0x00
+    cpu.step(); // JMP 0x000 -> 0x800
+    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x800});
+    cpu.step(); // JZ 0x00: se queda en la pagina 8, no baja a 0x000
     CHECK_EQ(cpu.programCounter(), std::uint16_t{0x800});
 }
 
 TEST(Mcs48Cpu, DjnzDecrementaYRepite) {
-    // MOV R0,#3 ; DJNZ R0,0x00 ; MOV A,#0x55
-    ProgramMemory program = makeProgram({0xb8, 0x03, 0xe8, 0x00, 0x23, 0x55});
+    // MOV R0,#3 ; DJNZ R0,0x02 (a si mismo) ; MOV A,#0x55
+    ProgramMemory program = makeProgram({0xb8, 0x03, 0xe8, 0x02, 0x23, 0x55});
     RecordingBus bus;
     Mcs48Cpu cpu(program, &bus);
     cpu.step(); // MOV R0,#3
-    cpu.step(); // DJNZ R0,0x00 -> R0 = 2, salta a 0x000
+    cpu.step(); // DJNZ R0,0x02 -> R0 = 2, salta a 0x002
     CHECK_EQ(cpu.readRegister(0), std::uint8_t{2});
-    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x000});
+    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x002});
     cpu.step(); // DJNZ R0,0x00 -> R0 = 1
     cpu.step(); // DJNZ R0,0x00 -> R0 = 0, no salta
     CHECK_EQ(cpu.readRegister(0), std::uint8_t{0});
@@ -161,7 +162,7 @@ TEST(Mcs48Cpu, CallYRetRestauranElContador) {
 }
 
 TEST(Mcs48Cpu, RetrRestauraElPsw) {
-    // 0x000: SEL RB1 ; CALL 0x010
+    // 0x000: SEL RB1 ; 0x001-0x002: CALL 0x010 (el retorno es 0x003)
     // 0x010: SEL RB0 ; RETR
     ProgramMemory program = makeProgram({0xd5, 0x14, 0x10});
     const std::uint8_t tail[] = {0xc5, 0x93};
@@ -177,11 +178,11 @@ TEST(Mcs48Cpu, RetrRestauraElPsw) {
     CHECK((cpu.psw() & Mcs48Cpu::kBankFlag) == 0);
     cpu.step(); // RETR: lo restaura
     CHECK((cpu.psw() & Mcs48Cpu::kBankFlag) != 0);
-    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x002});
+    CHECK_EQ(cpu.programCounter(), std::uint16_t{0x003});
 }
 
 TEST(Mcs48Cpu, LosBancosDeRegistrosSonDistintos) {
-    ProgramMemory program = makeProgram({0xb8, 0x11, 0xd5, 0xb8, 0x22, 0xc5});
+    ProgramMemory program = makeProgram({0xb8, 0x11, 0xd5, 0xb8, 0x22, 0xc5, 0xd5});
     RecordingBus bus;
     Mcs48Cpu cpu(program, &bus);
     cpu.step(); // MOV R0,#0x11 (banco 0)
@@ -204,7 +205,8 @@ TEST(Mcs48Cpu, OpcodeNoImplementadoFallaDeFormaExplicita) {
 }
 
 TEST(Mcs48Cpu, OpcodeIlegibleFalla) {
-    ProgramMemory program = makeProgram({0xff, 0xff, 0xff, 0xff});
+    // 0x01 no esta asignado en el MCS-48 (0xFF si lo esta: MOV A,R7).
+    ProgramMemory program = makeProgram({0x01, 0x00, 0x00, 0x00});
     RecordingBus bus;
     Mcs48Cpu cpu(program, &bus);
     cpu.step();

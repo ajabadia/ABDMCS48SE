@@ -2,9 +2,7 @@
 
 **BDMCS48SE** (*Bus/Data MCS-48 Sound Engine*) es el nombre de trabajo de un proyecto para crear instrumentos musicales a partir de firmware MCS-48. El repositorio de GitHub es [ajabadia/ABDMCS48SE](https://github.com/ajabadia/ABDMCS48SE); la decisión final sobre el nombre del producto sigue abierta.
 
-> **Estado:** fase de investigación, requisitos y documentación. Aún no hay implementación, compilación ni tests.
->
-> **Importante:** actualmente no estamos programando. El siguiente paso es seguir reuniendo información y cerrar decisiones antes de autorizar la implementación.
+> **Estado:** núcleo headless, firmware propio, host de referencia, esqueleto de plugin JUCE (sin interfaz) y CI multi-plataforma. Windows, Linux (GCC y Clang) y macOS compilan y pasan la suite; el plugin JUCE solo se ha verificado en Windows.
 
 ## Visión
 
@@ -77,14 +75,29 @@ La posible reutilización de componentes de MAME requiere revisar los **archivos
 
 **Este repositorio no declara aún una licencia definitiva para el producto.** Esa decisión queda pendiente de la auditoría de dependencias y firmware. No hay que añadir un badge de licencia hasta resolverla.
 
+## Compilación, tests y CI
+
+El core, el firmware, la voz y los tests no necesitan dependencias externas; solo CMake y un compilador C++20. El plugin JUCE es opcional y descarga JUCE en la primera configuración.
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+- Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone, más la prueba `plugin_smoke`.
+- `.github/workflows/ci.yml` compila y prueba en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang, y sube los logs de CTest como artefacto cuando algo falla.
+- Estado por plataforma: CI en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una) desde el primer run. En local, Windows está verificado en Debug y Release (119/119) con el plugin JUCE y el benchmark de humo (~160× tiempo real).
+
 ## Roadmap y documentación
 
 - [Roadmap](ROADMAP.md): fases, hitos, casillas de seguimiento y criterios de salida.
 - [Arquitectura](docs/ARCHITECTURE.md): límites entre core, perfiles, host y frontend.
 - [Paquete de firmware](docs/FIRMWARE_PACKAGE.md): propuesta de manifest, validación, bancos MCS-48 y ciclo de vida/hot swap (aún no normativa).
+- [Esqueleto del instrumento](docs/INSTRUMENT_SKELETON.md): cadena MIDI → voz → CPU → DAC, afinación, hilos y build del VST3/Standalone.
 - [Decisiones y preguntas abiertas](docs/DECISIONS_AND_QUESTIONS.md): acuerdos, supuestos y temas que iremos resolviendo.
 
-El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia. La fase actual es documentación; la implementación requiere autorización expresa.
+El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia, incluida la que falta por verificar.
 
 ## Contribuciones y conversación
 

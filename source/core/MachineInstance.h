@@ -3,18 +3,13 @@
 // un perfil (por ejemplo la maquina MCS-48 generica) implementa este
 // contrato y el host la puede sustituir en caliente.
 //
-// El estado de la maquina se consulta mediante status(), que es un metodo
-// no-const: lo llama el hilo de control y no el de audio. El hilo de audio
-// solo publica instantaneas vía el canal de instantaneas.
+// El estado de la maquina se consulta mediante status() const: lo llama el
+// hilo de control y no debe modificar nada. El hilo de audio solo publica
+// instantaneas vía el canal de instantaneas.
 //
-// Parte del protocolo de intercambio en caliente:
-//   * retiredPending(): cantidad de maquinas retiradas que aun no se
-//     destruyen. Lo lee el hilo de control para saber si el intercambio se
-//     puede completar.
-//   * drainRetired(): destruye las maquinas retiradas. Lo ejecuta el hilo
-//     de control despues de que el hilo de audio ya no las necesita.
-//   * status() const: la version constante para lectura de diagnostico que
-//     no modifica el estado de la maquina.
+// El ciclo de vida en caliente (que maquina queda retirada y cuando se
+// destruye) NO es asunto de la maquina: lo lleva MachineExchange, que es
+// quien conserva la propiedad de las instancias sustituidas.
 
 #pragma once
 
@@ -53,14 +48,9 @@ public:
     // Renderiza `frames` muestras en `outputs` (una fila por canal).
     virtual void runBlock(std::uint32_t frames, float* const* outputs, std::uint32_t channels) = 0;
 
-    // Estado para diagnostico.
-    virtual EngineStatus status() = 0;
-
-    // Interior del protocolo de intercambio en caliente. La maquina actua
-    // informa cuantas instancias retiradas aun no se destruyeron y permite
-    // que el hilo de control las recorra antes de finalizar.
-    virtual std::uint64_t retiredPending() const = 0;
-    virtual void drainRetired() = 0;
+    // Estado para diagnostico. Es const porque el host lo consulta desde el
+    // hilo de control sin tocar el estado de la maquina.
+    virtual EngineStatus status() const = 0;
 };
 
 } // namespace bdmcs48::core

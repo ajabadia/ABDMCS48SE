@@ -38,19 +38,28 @@ void GenericMcs48Machine::reset() {
 }
 
 void GenericMcs48Machine::rebuildClock() {
-    const auto effective = static_cast<std::uint32_t>(
-        static_cast<double>(config_.clockHz) * clockScale_);
+    const std::uint32_t effective = effectiveClockHz();
     // El reloj de la CPU cambia con el parametro, pero la maquina sigue
-    // consuming muestras a la misma tasa: por eso se reconstruye el
+    // consumiendo muestras a la misma tasa: por eso se reconstruye el
     // conversor conservando la fraccion pendiente.
     clock_ = core::CoreClock(effective == 0 ? 1u : effective, config_.clocksPerCycle, config_.sampleRateHz);
+    // El CPU no se reinicia al cambiar el reloj: su contador de ciclos sigue
+    // creciendo. El desfase mantiene la comparacion absoluta de runBlock.
+    cycleOffset_ = cpu_.cycles();
 }
 
 void GenericMcs48Machine::setParameter(std::uint32_t id, float value) {
     if (id != kParameterEngineClock) {
         return;
     }
-    const double scale = std::clamp(static_cast<double>(value), 0.25, 4.0);
+    // El contrato de MachineInstance entrega el parametro normalizado (0..1):
+    // el mismo valor que envia el host desde la cola de comandos. Proyectarlo
+    // al rango real evita que una automatizacion al 100 % se quede a mitad de
+    // camino (antes se recortaba a 0,25..4,0 como si ya fuese la escala).
+    const double normalized = std::clamp(static_cast<double>(value), 0.0, 1.0);
+    const double scale = static_cast<double>(kMinClockScale) +
+                         normalized * (static_cast<double>(kMaxClockScale) -
+                                       static_cast<double>(kMinClockScale));
     if (scale == clockScale_) {
         return;
     }
@@ -75,9 +84,17 @@ void GenericMcs48Machine::runBlock(std::uint32_t frames, float* const* outputs, 
     // escrituras (retencion de orden cero) y el momento de la escritura
     // importa para la posicion de la muestra affected.
     for (std::uint32_t frame = 0; frame < frames; ++frame) {
-        const std::uint64_t cycles = clock_.cyclesForSamples(1);
-        if (cycles > 0) {
-            cpu_.runCycles(cycles);
+        clock_.cyclesForSamples(1);
+        // Se ejecuta hasta el limite ABSOLUTO de ciclos, no una instruccion
+        // entera por muestra. runCycles() redondea hacia arriba hasta acabar
+        // la instruccion en curso; si ese sobrante se descartase en cada
+        // muestra, la CPU correria mas rapido que su reloj (hasta un 10 % con
+        // engine_clock a 1.0) y toda afinacion quedaria desafinada. Comparando
+        // contra el contador del CPU el sobrante se arrastra a la muestra
+        // siguiente y la media es exacta.
+        const std::uint64_t target = cycleOffset_ + clock_.totalCycles();
+        while (cpu_.cycles() < target && !cpu_.faulted()) {
+            cpu_.step();
         }
         const float sample = dacToFloat(dacValue_);
         for (std::uint32_t channel = 0; channel < channels; ++channel) {

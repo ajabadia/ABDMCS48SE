@@ -138,6 +138,15 @@ std::string Sha256::hexOf(const void* data, std::size_t size) {
     return hash.hexDigest();
 }
 
+std::string Sha256::hexOf(const char* text) {
+    return text == nullptr ? hexOf("", std::size_t{0})
+                           : hexOf(text, std::char_traits<char>::length(text));
+}
+
+std::string Sha256::hexOf(const std::string& text) {
+    return hexOf(text.data(), text.size());
+}
+
 std::string Sha256::hexOf(const std::vector<std::uint8_t>& data) {
     return hexOf(data.data(), data.size());
 }

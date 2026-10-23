@@ -26,9 +26,7 @@ public:
     void setParameter(std::uint32_t, float) override {}
     void writeInput(std::uint32_t, float) override {}
     void runBlock(std::uint32_t, float* const*, std::uint32_t) override {}
-    EngineStatus status() override { return EngineStatus{}; }
-    std::uint64_t retiredPending() const override { return 0; }
-    void drainRetired() override {}
+    bdmcs48::core::EngineStatus status() const override { return bdmcs48::core::EngineStatus{}; }
 
     int identifier() const { return identifier_; }
 
@@ -73,7 +71,8 @@ TEST(MachineExchange, LaMaquinaRetiradaNoSeDestruyeHastaQueSeDrena) {
 
     MachineInstance* installed = exchange.swapAtBlockBoundary(current);
     CHECK_EQ(installed, secondRaw);
-    CHECK_EQ(exchange.swapCount(), std::uint64_t{1});
+    // La instalacion inicial tambien cuenta: ya van dos intercambios.
+    CHECK_EQ(exchange.swapCount(), std::uint64_t{2});
     // La maquina retirada sigue viva: el hilo de audio no destruye nada.
     CHECK_EQ(gAlive, 2);
     CHECK_EQ(gDestroyed, 0);
@@ -102,15 +101,17 @@ TEST(MachineExchange, ColaDeRetiroLlenaDifiereElCambio) {
     gDestroyed = 0;
     MachineExchange exchange(2);
 
+    // Tres instalaciones seguidas: la primera no retira nada (no habia
+    // maquina activa) y las otras dos dejan 2 retiradas, que es la
+    // capacidad de la cola.
     MachineInstance* current = nullptr;
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
         auto machine = std::make_unique<StubMachine>(i);
         MachineInstance* raw = machine.get();
         exchange.publish(std::move(machine));
         current = exchange.swapAtBlockBoundary(current);
         CHECK(current == raw);
     }
-    // Ahora la cola de retiro tiene 2 maquinas: esta llena.
     CHECK_EQ(exchange.retiredPending(), std::size_t{2});
 
     auto machine = std::make_unique<StubMachine>(99);
@@ -122,7 +123,7 @@ TEST(MachineExchange, ColaDeRetiroLlenaDifiereElCambio) {
     // queda pendiente para el siguiente bloque.
     CHECK_EQ(installed, current);
     CHECK(exchange.hasPending());
-    CHECK_EQ(exchange.swapCount(), std::uint64_t{2});
+    CHECK_EQ(exchange.swapCount(), std::uint64_t{3});
 
     // Al drenar hay sitio y el cambio se produce.
     exchange.drainRetired();
@@ -130,5 +131,5 @@ TEST(MachineExchange, ColaDeRetiroLlenaDifiereElCambio) {
     CHECK_EQ(exchange.retiredPending(), std::size_t{0});
     MachineInstance* installed2 = exchange.swapAtBlockBoundary(current);
     CHECK_EQ(installed2, raw);
-    CHECK_EQ(exchange.swapCount(), std::uint64_t{3});
+    CHECK_EQ(exchange.swapCount(), std::uint64_t{4});
 }

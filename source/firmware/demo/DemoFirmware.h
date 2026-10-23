@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "firmware/PackageLoader.h"
+
 namespace bdmcs48::firmware::demo {
 
 struct DemoImage {
@@ -35,6 +37,11 @@ const std::vector<DemoImage>& demoImages();
 // Los hashes SHA-256 del manifiesto se calculan aqui, de modo que nunca
 // pueden quedar desincronizados con los bytes.
 bool writeDemoPackage(const std::string& directory, std::string& error);
+
+// Mismo paquete, ya cargado en memoria. Un host que no debe escribir en
+// disco (el plugin) lo instala directamente; los bytes y los hashes son los
+// mismos que produce writeDemoPackage().
+LoadedPackage demoPackage();
 
 // Descripcion legible del programa, para la ayuda y la documentacion.
 std::string demoDescription();

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <system_error>
 
+#include "firmware/FirmwarePackage.h"
 #include "firmware/Sha256.h"
 
 namespace bdmcs48::firmware::demo {
@@ -203,7 +204,7 @@ std::string buildManifest(const std::string& bank0Hash, const std::string& bank1
     json += "    { \"id\": \"control\", \"type\": \"latch_out\" }\n";
     json += "  ],\n";
     json += "  \"parameters\": [\n";
-    json += "    { \"id\": \"engine_clock\", \"type\": \"float\", \"minimum\": 0.25, \"maximum\": 4.0, ";
+    json += "    { \"id\": \"engine_clock\", \"type\": \"float\", \"minimum\": 0.0625, \"maximum\": 8.0, ";
     json += "\"initial\": 1.0, \"hostAutomatable\": true }\n";
     json += "  ]\n";
     json += "}\n";
@@ -220,6 +221,28 @@ const std::vector<DemoImage>& demoImages() {
         return result;
     }();
     return images;
+}
+
+LoadedPackage demoPackage() {
+    const std::vector<DemoImage>& images = demoImages();
+
+    LoadedPackage package;
+    std::vector<ValidationIssue> issues;
+    const std::string text = buildManifest(Sha256::hexOf(images[0].data), Sha256::hexOf(images[1].data));
+    if (!FirmwarePackage::parseManifest(text, package.manifest, issues)) {
+        return {};
+    }
+
+    for (const DemoImage& image : images) {
+        LoadedImage loaded;
+        loaded.id = image.id;
+        loaded.region = image.region;
+        loaded.bank = image.bank;
+        loaded.offset = image.offset;
+        loaded.data = image.data;
+        package.images.push_back(std::move(loaded));
+    }
+    return package;
 }
 
 bool writeDemoPackage(const std::string& directory, std::string& error) {
