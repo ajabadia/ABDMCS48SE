@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BDMCS48SE Instrument</title>
-  <link rel="stylesheet" href="/main.css">
+  <!-- Entrada de Vite: el CSS entra por el import de src/main.js, asi que el
+       bundle sale como assets/index.js + assets/index.css. El documento final
+       lo genera `node Scripts/build_webui.js` en WebUI/dist. -->
+  <script type="module" src="/src/main.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -60,11 +63,6 @@
       </div>
     </section>
 
-    <section class="panel keyboard" aria-labelledby="keyboard-title">
-      <h2 id="keyboard-title">Teclado</h2>
-      <div class="keys" id="keys" role="group" aria-label="Teclado virtual de dos octavas"></div>
-    </section>
-
     <section class="panel status" aria-labelledby="status-title">
       <h2 id="status-title">Estado</h2>
       <dl class="status-grid">
@@ -83,6 +81,14 @@
     </section>
   </main>
 
-  <script src="/main.js"></script>
+  <!-- El keybed va al fondo, a todo el ancho: es la superficie de juego y se
+       queda fija mientras el contenido de arriba hace scroll. -->
+  <section class="panel keyboard" aria-labelledby="keyboard-title">
+    <h2 id="keyboard-title">Teclado</h2>
+    <!-- Keybed compartido de ABDShared (@abdsynths/midi-keyb): lo monta
+         main.js. El host fija la altura, que es el contrato del componente. -->
+    <div id="piano-keyboard"></div>
+  </section>
+
 </body>
 </html>

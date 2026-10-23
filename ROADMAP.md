@@ -129,7 +129,7 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - [ ] Establecer serialización de estado/presets con referencia y hash de ROM/profile, nunca con datos de ROM comercial incrustados. Parcial: se guardan gain, release y la ruta del firmware, sin hash.
 - [ ] Verificar carga, reset, audio y recuperación ante ROM ausente en Standalone y VST3. Parcial: VST3 y Standalone compilan y la prueba headless `plugin_smoke` valida MIDI y audio; falta abrirlos en un host real.
 - [x] Documentar requisitos de threading y ownership entre Processor, editor y máquina. Evidencia: `docs/INSTRUMENT_SKELETON.md`.
-- [x] Editor JUCE mínimo con WebView: matriz de comandos, teclado de dos octavas, gain/release, panel de estado y presets. Evidencia: `source/plugin/PluginEditor.*`, `source/webui/` y `plugin_smoke` (recursos embebidos, contrato del puente y matriz).
+- [x] Editor JUCE mínimo con WebView: matriz de comandos, teclado de dos octavas, gain/release, panel de estado y presets. Evidencia: `source/plugin/PluginEditor.*`, `WebUI/` (bundle de Vite embebido), `source/webui/WebUIResources.*` y `plugin_smoke` (recursos embebidos, contrato del puente y matriz).
 
 **Estado:** instrumento con editor WebView (2026-10-23). El camino MIDI → voz → reloj → firmware → audio y la matriz están probados headless; el editor se ha arrancado en Standalone con WebView2.
 

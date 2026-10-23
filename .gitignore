@@ -48,6 +48,10 @@ Desktop.ini
 !.env.sample
 *.local
 
+# WebUI: Vite instala en WebUI/node_modules y regenera WebUI/dist en cada build
+WebUI/node_modules/
+WebUI/dist/
+
 # Caches and temporary files
 .cache/
 .cache-*/

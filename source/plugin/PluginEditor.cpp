@@ -9,21 +9,76 @@
 namespace bdmcs48::plugin {
 namespace {
 
+// Carpeta de datos de WebView2 aislada por build. Reusar una sola carpeta (o
+// %TEMP%) es lo que deja la ventana en blanco cuando una instancia anterior
+// murio a lo bruto: su msedgewebview2.exe sigue vivo, bloquea EBWebView y el
+// renderer nuevo no arranca. El sello se toma del propio ejecutable, asi que
+// cambia con cada build sin exigir una definicion de CMake por compilacion.
+juce::File webView2UserDataFolder() {
+    const auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
+    const auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("ABDMCS48SE")
+                          .getChildFile("WebView2");
+    const auto current = base.getChildFile(
+        juce::String(executable.getLastModificationTime().toMilliseconds()));
+
+    // Limpieza best-effort de builds anteriores; si alguna sigue bloqueada se
+    // ignora y el arranque continua con la carpeta nueva.
+    if (base.isDirectory()) {
+        for (const auto& entry :
+             juce::RangedDirectoryIterator(base, false, "*", juce::File::findDirectories)) {
+            if (entry.getFile() != current) {
+                entry.getFile().deleteRecursively();
+            }
+        }
+    }
+
+    current.createDirectory();
+    return current;
+}
+
+// En desarrollo la pagina se sirve desde WebUI/dist en disco, que es lo que
+// regenera `node Scripts/build_webui.js` sin recompilar el plugin. En un build
+// instalado ese directorio no existe y manda el bundle embebido.
+std::optional<juce::File> diskFallbackFor(const std::string& path) {
+    const auto projectDir = juce::File(__FILE__).getParentDirectory().getParentDirectory().getParentDirectory();
+    const auto file = projectDir.getChildFile("WebUI").getChildFile("dist").getChildFile(
+        juce::String(path).replace("\\", "/"));
+    if (file.existsAsFile()) {
+        return file;
+    }
+    return std::nullopt;
+}
+
 juce::WebBrowserComponent::Options withResourceProvider(
     juce::WebBrowserComponent::Options options) {
     using Resource = juce::WebBrowserComponent::Resource;
 
     auto provider = [](const juce::String& path) -> std::optional<Resource> {
         bdmcs48::webui::Resource embedded;
-        if (!bdmcs48::webui::resourceFor(path.toStdString(), embedded) ||
-            embedded.data == nullptr) {
-            return std::nullopt;
+        if (bdmcs48::webui::resourceFor(path.toStdString(), embedded) && embedded.data != nullptr) {
+            std::vector<std::byte> bytes(embedded.size);
+            if (embedded.size > 0) {
+                std::memcpy(bytes.data(), embedded.data, embedded.size);
+            }
+            return Resource{std::move(bytes), juce::String(embedded.mimeType)};
         }
-        std::vector<std::byte> bytes(embedded.size);
-        if (embedded.size > 0) {
-            std::memcpy(bytes.data(), embedded.data, embedded.size);
+
+        if (auto file = diskFallbackFor(path.toStdString())) {
+            juce::MemoryBlock block;
+            if (file->loadFileAsData(block)) {
+                std::vector<std::byte> bytes(static_cast<std::size_t>(block.getSize()));
+                if (block.getSize() > 0) {
+                    std::memcpy(bytes.data(), block.getData(), static_cast<std::size_t>(block.getSize()));
+                }
+                return Resource{std::move(bytes), juce::String(bdmcs48::webui::mimeTypeFor(
+                                                       path.toStdString()))};
+            }
         }
-        return Resource{std::move(bytes), juce::String(embedded.mimeType)};
+
+        // Sin recurso: 404 real. Devolver index.html para cualquier ruta
+        // escondia un asset mal empaquetado detras de una pagina a medias.
+        return std::nullopt;
     };
 
     return options.withResourceProvider(std::move(provider));
@@ -42,9 +97,11 @@ juce::WebBrowserComponent::Options InstrumentEditor::makeOptions(InstrumentEdito
     auto options = Options{}
                        .withBackend(Options::Backend::webview2)
                        .withWinWebView2Options(
-                           Options::WinWebView2{}.withUserDataFolder(
-                               juce::File::getSpecialLocation(juce::File::tempDirectory)
-                                   .getChildFile("ABDMCS48SE-webview"))
+                           Options::WinWebView2{}
+                               .withUserDataFolder(webView2UserDataFolder())
+                               // Sin color de fondo la ventana parpadea en
+                               // blanco hasta que la pagina pinta.
+                               .withBackgroundColour(juce::Colour(0xff101317))
                                .withStatusBarDisabled())
                        .withNativeIntegrationEnabled()
                        .withKeepPageLoadedWhenBrowserIsHidden();

@@ -12,9 +12,10 @@
 | Firmware de voz | `source/firmware/demo/MonoVoiceFirmware.*` | ROM original de 16 bytes: onda cuadrada simétrica. Paquete en memoria, sin escribir en disco. |
 | Processor | `source/plugin/PluginProcessor.*` | `juce::AudioProcessor`, APVTS (gain/release), MIDI con offsets, DC blocker, carga de paquetes y estado. |
 | Matriz de comandos | `source/instrument/CommandMatrix.*` | 8 filas nota → comando con probabilidad, delay y mutación. Sin JUCE ni MIDI: recibe notas ya extraídas. |
-| Editor WebView | `source/plugin/PluginEditor.*` | `WebBrowserComponent`, `ResourceProvider` sobre recursos embebidos y despacho de funciones nativas. |
+| Editor WebView | `source/plugin/PluginEditor.*` | `WebBrowserComponent`, `ResourceProvider` sobre el bundle embebido, fallback a disco en desarrollo y despacho de funciones nativas. |
 | Puente JSON | `source/plugin/WebViewBridge.*` | Contrato tipado C++ ↔ JS: estado, filas, parámetros, notas y presets. C++ valida y aplica. |
-| Página | `source/webui/index.html`, `main.js`, `main.css` | Teclado de dos octavas, matriz de 8 filas, panel de estado y presets. Se empaqueta con `juce_add_binary_data`. |
+| Página | `WebUI/index.html`, `WebUI/src/` | Teclado de dos octavas, matriz de 8 filas, panel de estado y presets. Vite lo empaqueta en `WebUI/dist`, que se embebe con `juce_add_binary_data`. |
+| Mapeo de recursos | `source/webui/WebUIResources.*` | Ruta HTTP → bytes + MIME sobre el bundle; sin JUCE para poder probarlo desde `plugin_smoke`. |
 | Prueba headless | `tests/PluginSmokeTest.cpp` | MIDI → processor → audio, matriz (disparo, delay, probabilidad, mutación), recursos embebidos y roundtrip de estado. |
 | Build | `CMakeLists.txt` | `ABDMCS48SE_BUILD_PLUGIN` (OFF por defecto), JUCE 9.0.4 por FetchContent, formatos Standalone y VST3. |
 
@@ -72,8 +73,29 @@ Note On
 
 ## Editor
 
-- `source/webui/` se empaqueta con `juce_add_binary_data`: el VST3 y el
-  Standalone funcionan sin un directorio `WebUI/` al lado del binario.
+- La UI se escribe en `WebUI/` (HTML + `src/main.js` + `src/main.css`) y se
+  empaqueta con Vite: `node Scripts/build_webui.js` genera `WebUI/dist`
+  (`index.html`, `assets/index.js`, `assets/index.css`, sin hash en el nombre).
+  Ese dist se embebe con `juce_add_binary_data`: el VST3 y el Standalone
+  funcionan sin un directorio `WebUI/` al lado del binario.
+- El teclado virtual **no es propio**: se monta el keybed compartido de
+  ABDShared, `@abdsynths/midi-keyb`, el mismo que usa ABDMS2000. Vite lo
+  resuelve contra el checkout hermano `../ABDShared` (o `ABD_SHARED_DIR`) y
+  sus hojas de estilo entran en el bundle. La página solo aporta los
+  callbacks `noteOn`/`noteOff`/`allNotesOff`; las notas siguen viniendo del
+  backend y el keybed no guarda estado musical.
+- Configuración del keybed: 2 octavas fijas desde C3 (`fixedOctaves`), sin
+  ruedas de pitch/mod (el motor no las implementa) y con hold/latch y retrig
+  apagados, porque sobre la CPU emulada dejarían notas sonando sin pulsación.
+  La franja tiene altura definida (155 px): es el contrato del componente para
+  que WebView2 no colapse las teclas.
+- CMake falla en la configuración si falta `WebUI/dist/index.html`, en vez de
+  producir un plugin sin editor. En desarrollo el `ResourceProvider` cae a
+  `WebUI/dist` en disco después de mirar el bundle, así que regenerar el dist
+  se ve al recargar sin recompilar.
+- El provider resuelve rutas exactas o por sufijo, sirve el MIME por extensión
+  y devuelve 404 para una ruta desconocida: un asset mal empaquetado se nota,
+  no se disfraza con la página principal.
 - La página pide el estado con `getState` y recibe actualizaciones por el
   evento `bdmcs48-state` a 20 Hz. No guarda su propia verdad: PC, PSW, ciclos,
   nivel y filas vienen del backend.

@@ -4,6 +4,16 @@
 // actualizaciones por eventos y envia intenciones (notas, filas, presets).
 // C++ valida y aplica; lo que se pinta siempre viene del backend.
 
+// Vite empaqueta este import junto al JavaScript y emite assets/index.css,
+// que el index.html del dist referencia solo. El provider nativo no conoce
+// rutas de fuentes: sirve lo que salio del build.
+import './main.css';
+
+// Keybed estandar de ABDSynths: el mismo componente que monta ABDMS2000.
+// Vite lo resuelve contra el checkout hermano de ABDShared (ver vite.config.js).
+import { createKeyboard } from '@abdsynths/midi-keyb';
+import '@abdsynths/midi-keyb/keyboard.css';
+
 (() => {
   const backend = window.__JUCE__.backend;
 
@@ -210,71 +220,35 @@
   }
 
   // --- Teclado ------------------------------------------------------------
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const blackOffsets = [1, 3, 6, 8, 10];
-  const FIRST_NOTE = 48; // C3
-  const LAST_NOTE = 71; // B4
-
-  function buildKeyboard() {
-    const container = el("keys");
-    const whiteNotes = [];
-    for (let note = FIRST_NOTE; note <= LAST_NOTE; note += 1) {
-      if (!blackOffsets.includes(note % 12)) whiteNotes.push(note);
-    }
-
-    // Teclas blancas en fila; las negras se superponen entre ellas.
-    const width = 100 / whiteNotes.length;
-    whiteNotes.forEach((note, index) => {
-      const key = document.createElement("button");
-      key.type = "button";
-      key.className = "key white";
-      key.dataset.note = String(note);
-      key.style.left = `${index * width}%`;
-      key.style.width = `calc(${width}% - 2px)`;
-      key.textContent = `${noteNames[note % 12]}${Math.floor(note / 12) - 1}`;
-      container.appendChild(key);
+  // Keybed compartido de ABDShared (@abdsynths/midi-keyb), el mismo que monta
+  // ABDMS2000. La pagina solo aporta callbacks; C++ sigue siendo la autoridad
+  // de la nota: el keybed no guarda estado musical propio.
+  function setupKeyboard() {
+    createKeyboard({
+      containerId: "piano-keyboard",
+      onNoteOn: (note, velocity) => callNative("noteOn", note, velocity),
+      onNoteOff: (note) => callNative("noteOff", note),
+      onPanic: () => callNative("allNotesOff"),
+      config: {
+        numOctaves: 2,
+        startNote: 48, // C3..B4: el rango que tenia el teclado anterior
+        fixedOctaves: true, // el host fija el rango; no se reacomoda por ancho
+        maxOctaveShift: 0,
+        velocitySource: "fixed",
+        fixedVelocity: 0.9,
+        velocityCurve: "linear",
+        enableQwerty: true,
+        showQwertyLabels: true,
+        enableTouch: true,
+        // Teclas con role=button y aria-label ("Note C3 (MIDI 48)"): sin esto
+        // el keybed es una fila de divs que un lector de pantalla no ve.
+        enableAccessibility: true,
+        // Hold/latch y retrig quedan apagados: sobre la CPU emulada dejan notas
+        // sonando sin pulsacion. El componente los activa por defecto.
+        enableHold: false,
+        enableRetrig: false,
+      },
     });
-
-    let whiteIndex = 0;
-    for (let note = FIRST_NOTE; note <= LAST_NOTE; note += 1) {
-      if (!blackOffsets.includes(note % 12)) {
-        whiteIndex += 1;
-        continue;
-      }
-      const key = document.createElement("button");
-      key.type = "button";
-      key.className = "key black";
-      key.dataset.note = String(note);
-      key.style.left = `${whiteIndex * width - width * 0.31}%`;
-      key.style.width = `${width * 0.62}%`;
-      key.title = `${noteNames[note % 12]}${Math.floor(note / 12) - 1}`;
-      container.appendChild(key);
-    }
-
-    let activeNote = null;
-
-    const release = () => {
-      if (activeNote === null) return;
-      const key = container.querySelector(`.key[data-note="${activeNote}"]`);
-      if (key) key.classList.remove("active");
-      callNative("noteOff", activeNote);
-      activeNote = null;
-    };
-
-    container.addEventListener("pointerdown", (event) => {
-      const key = event.target.closest(".key");
-      if (!key) return;
-      event.preventDefault();
-      release();
-      activeNote = Number(key.dataset.note);
-      key.classList.add("active");
-      callNative("noteOn", activeNote, 0.9);
-    });
-
-    container.addEventListener("pointerup", release);
-    container.addEventListener("pointercancel", release);
-    container.addEventListener("pointerleave", release);
-    window.addEventListener("blur", release);
   }
 
   // --- Parametros ---------------------------------------------------------
@@ -393,7 +367,7 @@
   for (let index = 0; index < ROW_COUNT; index += 1) {
     buildRow(index);
   }
-  buildKeyboard();
+  setupKeyboard();
   bindParameters();
   bindTransport();
 

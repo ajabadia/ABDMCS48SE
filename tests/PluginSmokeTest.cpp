@@ -235,7 +235,7 @@ void testMatrixMutacion() {
 
 void testRecursosEmbebidos() {
     // El plugin no depende de un directorio WebUI/ junto al binario: la
-    // pagina viaja en BinaryData.
+    // pagina viaja en BinaryData como bundle de Vite (WebUI/dist).
     bdmcs48::webui::Resource resource;
     check(bdmcs48::webui::resourceFor("/", resource), "la raiz sirve index.html");
     check(std::string(resource.mimeType).find("text/html") == 0,
@@ -243,16 +243,38 @@ void testRecursosEmbebidos() {
     check(std::string(resource.data, resource.size).find("Matriz de comandos") !=
               std::string::npos,
           "index.html contiene la matriz");
-
-    check(bdmcs48::webui::resourceFor("/main.js", resource), "el JavaScript esta embebido");
-    check(std::string(resource.data, resource.size).find("__JUCE__") != std::string::npos,
-          "main.js usa el puente de JUCE");
-    check(std::string(resource.data, resource.size).find("PROTOCOL_VERSION") !=
+    check(std::string(resource.data, resource.size).find("assets/index.js") !=
               std::string::npos,
-          "main.js comprueba la version del contrato");
+          "index.html carga el bundle de Vite");
+    check(std::string(resource.data, resource.size).find("id=\"piano-keyboard\"") !=
+              std::string::npos,
+          "index.html monta el keybed compartido");
 
-    check(bdmcs48::webui::resourceFor("/main.css", resource), "el CSS esta embebido");
-    check(std::string(resource.mimeType).find("text/css") == 0, "main.css se sirve como CSS");
+    check(bdmcs48::webui::resourceFor("/assets/index.js", resource),
+          "el JavaScript del bundle esta embebido");
+    check(std::string(resource.mimeType).find("text/javascript") == 0,
+          "el bundle se sirve como JavaScript");
+    check(std::string(resource.data, resource.size).find("__JUCE__") != std::string::npos,
+          "el bundle usa el puente de JUCE");
+    check(std::string(resource.data, resource.size).find("getState") !=
+              std::string::npos,
+          "el bundle pregunta el estado a C++");
+
+    check(bdmcs48::webui::resourceFor("/assets/index.css", resource),
+          "el CSS del bundle esta embebido");
+    check(std::string(resource.mimeType).find("text/css") == 0,
+          "el CSS se sirve como CSS");
+    check(std::string(resource.data, resource.size).find("kbd-keys-wrapper") !=
+              std::string::npos,
+          "el CSS incluye el keybed compartido de ABDShared");
+
+    // El provider puede recibir la URL completa y un query de cache-busting.
+    check(bdmcs48::webui::resourceFor("juce://juce.backend/assets/index.js?v=3", resource),
+          "una URL absoluta con query se resuelve al mismo recurso");
+
+    // Una ruta que no existe no se maquilla con index.html: es un 404.
+    check(!bdmcs48::webui::resourceFor("/assets/falta.js", resource),
+          "una ruta desconocida no devuelve la pagina");
 }
 
 void testContratoDelPuente() {

@@ -146,10 +146,21 @@ if(ABDMCS48SE_BUILD_PLUGIN)
 
     # La pagina del editor viaja dentro del binario: el plugin no necesita un
     # directorio WebUI/ al lado del VST3 ni del Standalone.
-    juce_add_binary_data(bdmcs48se_webui SOURCES
-        source/webui/index.html
-        source/webui/main.js
-        source/webui/main.css)
+    #
+    # Lo que se embebe es el bundle de Vite, no las fuentes: WebUI/src/main.js
+    # importa el CSS y el build produce WebUI/dist/index.html + assets/*. Si el
+    # dist falta, la configuracion falla aqui en vez de generar un plugin sin
+    # interfaz; si esta viejo, `node Scripts/build_webui.js` lo regenera.
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/WebUI/dist/index.html")
+        message(FATAL_ERROR
+            "WebUI/dist/index.html not found. Run 'node Scripts/build_webui.js' "
+            "(Vite build) before configuring CMake.")
+    endif()
+    file(GLOB_RECURSE WEBUI_ASSETS CONFIGURE_DEPENDS "WebUI/dist/*")
+    juce_add_binary_data(bdmcs48se_webui
+        HEADER_NAME "BinaryData.h"
+        NAMESPACE "BinaryData"
+        SOURCES ${WEBUI_ASSETS})
 
     target_sources(bdmcs48se_instrument PRIVATE
         source/plugin/PluginProcessor.cpp
@@ -163,9 +174,16 @@ if(ABDMCS48SE_BUILD_PLUGIN)
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
     if(WIN32)
-        # Activa el backend WebView2 y, con el, el ResourceProvider: sin esta
-        # macro JUCE usa el backend antiguo de IE y no sirve recursos locales.
-        target_compile_definitions(bdmcs48se_instrument PUBLIC JUCE_USE_WIN_WEBVIEW2=1)
+        # Activa el backend WebView2 y, con el, el ResourceProvider: sin estas
+        # macros JUCE usa el backend antiguo de IE y no sirve recursos locales.
+        #
+        # La segunda es la que decide COMO se carga WebView2: juce_webview2
+        # enlaza WebView2LoaderStatic.lib, pero sin ella el codigo llama a
+        # LoadLibraryA("WebView2Loader.dll") —que ese enlace no instala— y el
+        # WebBrowserComponent se queda sin motor: ventana abierta, pagina vacia.
+        target_compile_definitions(bdmcs48se_instrument PUBLIC
+            JUCE_USE_WIN_WEBVIEW2=1
+            JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
     endif()
 
     target_link_libraries(bdmcs48se_instrument

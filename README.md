@@ -85,7 +85,9 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-- Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone (editor WebView con recursos embebidos), más la prueba `plugin_smoke`. En Windows hace falta el paquete NuGet **Microsoft.Web.WebView2** y su runtime.
+- Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone (editor WebView con el bundle de Vite embebido), más la prueba `plugin_smoke`. En Windows hace falta el paquete NuGet **Microsoft.Web.WebView2** y su runtime.
+- El editor se escribe en `WebUI/` y su build es un paso previo a CMake: `npm --prefix WebUI install` una vez, y `node Scripts/build_webui.js` en cada cambio de UI. Genera `WebUI/dist` (ignorado por Git), que es lo que se embebe; sin ese directorio la configuración falla a propósito.
+- La UI monta el keybed compartido de **ABDShared** (`@abdsynths/midi-keyb`), el mismo que ABDMS2000; no hay copia en este repo. El build lo resuelve desde el checkout hermano `../ABDShared` o desde `ABD_SHARED_DIR` (`node Scripts/build_webui.js` falla con un mensaje claro si no lo encuentra).
 - `.github/workflows/ci.yml` compila y prueba en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang, y sube los logs de CTest como artefacto cuando algo falla.
 - Estado por plataforma: CI en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una) desde el primer run. En local, Windows está verificado en Debug y Release (119/119) con el plugin JUCE y el benchmark de humo (~160× tiempo real).
 
