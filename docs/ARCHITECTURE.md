@@ -143,7 +143,7 @@ segmento, no al principio del bloque entero.
 
 - Acciones frontend → C++: funciones nativas concretas registradas con `withNativeFunction`, invocadas mediante la API JUCE de frontend; C++ valida tipos/rangos/estado y despacha por el canal de host adecuado.
 - Notificaciones C++ → frontend: eventos del host, por ejemplo `emitEventIfBrowserIsVisible`, emitidos desde el contexto de UI después de que la página esté lista.
-- `ResourceProvider`: servir recursos web y datos binarios, no un bus de mensajes de propósito general.
+- `ResourceProvider`: servir recursos web y datos binarios, no un bus de mensajes de propósito general. La página que sirve es el bundle de Vite (`WebUI/dist`, sin hash en los nombres) embebido con `juce_add_binary_data`; el mapeo vive en `source/webui/WebUIResources.*`, resuelve por ruta exacta o sufijo, declara el MIME por extensión y devuelve 404 (no `index.html`) cuando la ruta no existe. En desarrollo cae a `WebUI/dist` en disco para no recompilar por un cambio de UI.
 - El bridge no filtra `juce::var`, `juce::File`, `MidiBuffer` ni `AudioBuffer` al SDK.
 - JSON puede ser formato/protocolo de configuración o UI, pero no representación interna obligatoria del core.
 - Cualquier ejemplo de callback o API del documento es ilustrativo hasta validarse contra la versión JUCE fijada.

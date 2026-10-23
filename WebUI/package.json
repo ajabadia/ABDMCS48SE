@@ -1,0 +1,14 @@
+{
+  "name": "bdmcs48se-webui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Editor WebView de BDMCS48SE: fuente de WebUI/dist, que CMake embebe en el binario.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^8.3.2"
+  }
+}
