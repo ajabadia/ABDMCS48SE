@@ -1,8 +1,8 @@
 # Instrumento monofónico — esqueleto técnico
 
-> **Estado:** esqueleto funcional **sin interfaz**, a 2026-10-22. El plugin se
-> construye como VST3 + Standalone, recibe MIDI y suena; el editor queda
-> pendiente de instrucciones.
+> **Estado:** instrumento con editor **WebView**, a 2026-10-23. El plugin se
+> construye como VST3 + Standalone, recibe MIDI, suena y expone la matriz de
+> comandos y los parámetros desde una página embebida en el binario.
 
 ## Qué se ha construido
 
@@ -11,7 +11,11 @@
 | Voz monofónica | `source/instrument/MonoVoice.*` | Nota MIDI → escala del reloj, prioridad de última nota, envolvente de puerta. Sin JUCE. |
 | Firmware de voz | `source/firmware/demo/MonoVoiceFirmware.*` | ROM original de 16 bytes: onda cuadrada simétrica. Paquete en memoria, sin escribir en disco. |
 | Processor | `source/plugin/PluginProcessor.*` | `juce::AudioProcessor`, APVTS (gain/release), MIDI con offsets, DC blocker, carga de paquetes y estado. |
-| Prueba headless | `tests/PluginSmokeTest.cpp` | MIDI → processor → audio: afinación de A4 y silencio al soltar. |
+| Matriz de comandos | `source/instrument/CommandMatrix.*` | 8 filas nota → comando con probabilidad, delay y mutación. Sin JUCE ni MIDI: recibe notas ya extraídas. |
+| Editor WebView | `source/plugin/PluginEditor.*` | `WebBrowserComponent`, `ResourceProvider` sobre recursos embebidos y despacho de funciones nativas. |
+| Puente JSON | `source/plugin/WebViewBridge.*` | Contrato tipado C++ ↔ JS: estado, filas, parámetros, notas y presets. C++ valida y aplica. |
+| Página | `source/webui/index.html`, `main.js`, `main.css` | Teclado de dos octavas, matriz de 8 filas, panel de estado y presets. Se empaqueta con `juce_add_binary_data`. |
+| Prueba headless | `tests/PluginSmokeTest.cpp` | MIDI → processor → audio, matriz (disparo, delay, probabilidad, mutación), recursos embebidos y roundtrip de estado. |
 | Build | `CMakeLists.txt` | `ABDMCS48SE_BUILD_PLUGIN` (OFF por defecto), JUCE 9.0.4 por FetchContent, formatos Standalone y VST3. |
 
 Cambios en el core que el instrumento necesitaba:
@@ -38,15 +42,61 @@ Cambios en el core que el instrumento necesitaba:
    seguía sonando 0,3 s después de soltar). Ahora ignora valores iguales al
    vigente y solo recalcula si el tiempo cambia de verdad.
 
+## Matriz de comandos
+
+La inteligencia performable vive en el host; el core sigue recibiendo comandos
+resueltos. Cada Note On evalúa las filas cuya nota coincide:
+
+```text
+Note On
+  → probabilidad (se decide al recibir la nota)
+  → programación por deadline (delay en ms → muestras)
+  → CommandQueue → applyPendingCommands()
+  → setParameter(engine_clock) o writeInput(latch)
+```
+
+- **Valor:** para `engine_clock` es el multiplicador de reloj (0,0625..8,0);
+  para `latch_write`, el byte 0..255. `CommandMatrix::commandFor` lo convierte
+  al entero que espera `MachineHost` (valor/32767).
+- **Mutación:** `none`, `increment`, `decrement`, `random` (con PRNG xorshift
+  sembrado) y `wrap`. Solo se aplica cuando la fila se ejecuta de verdad, no
+  cuando falla la probabilidad, y afecta a la **siguiente** ejecución.
+- **Tiempo:** el processor parte el bloque en cada deadline; un retardo de
+  5 ms cae en su muestra, no al principio del bloque siguiente. Si no hay
+  comandos, el bloque se renderiza de una vez.
+- **Hilos:** la UI edita una copia en el hilo de mensajes; `publishRows` la
+  publica con doble buffer y el hilo de audio la adopta al inicio del bloque.
+  Nunca hay locks ni asignaciones en la ruta de audio.
+- **Persistencia:** cada fila va al estado del plugin dentro de
+  `<CommandMatrix>`; el roundtrip está cubierto por `plugin_smoke`.
+
+## Editor
+
+- `source/webui/` se empaqueta con `juce_add_binary_data`: el VST3 y el
+  Standalone funcionan sin un directorio `WebUI/` al lado del binario.
+- La página pide el estado con `getState` y recibe actualizaciones por el
+  evento `bdmcs48-state` a 20 Hz. No guarda su propia verdad: PC, PSW, ciclos,
+  nivel y filas vienen del backend.
+- El contrato está versionado: `protocol` viaja en el documento de estado y en
+  `listPresets` (`kUiProtocolVersion` en `source/plugin/UiProtocol.h`). La
+  página compara la versión al arrancar y muestra un error visible si no
+  coincide; nunca pinta controles con un esquema que no entiende.
+- Funciones nativas: `getState`, `listPresets`, `noteOn`, `noteOff`,
+  `allNotesOff`, `setParameter`, `setRow`, `resetMachine`, `savePreset` y
+  `loadPreset`. El teclado virtual entra por `MidiMessageCollector`, el mismo
+  camino que el MIDI del DAW.
+- Presets del Standalone: `%APPDATA%/ABDMCS48SE/presets/*.bdm48` (o el
+  equivalente de cada sistema). Guardan parámetros, matriz, semilla y ruta de
+  firmware.
+
 ## Cadena de señal
 
 ```text
-MIDI (host)
+MIDI (DAW / teclado virtual)
   │  note on/off, offsets de muestra
-  ▼
-MonoVoice ── nota → escala de reloj ──┐
-  │  envolvente ataque/liberación      │
-  ▼                                    ▼
+  ├── MonoVoice ── nota → escala de reloj ─┐
+  └── CommandMatrix ── filas, delay ───────┤
+                                           ▼
 processor ── cola de comandos ──► GenericMcs48Machine
                                      │  CPU MCS-48 + firmware
                                      ▼
@@ -86,6 +136,9 @@ cmake --build build-plugin --config Release --parallel
 
 - La primera configuración **descarga JUCE 9.0.4** (FetchContent) y tarda uno o
   dos minutos; después queda en `build-plugin/_deps`.
+- En Windows el editor necesita el paquete **Microsoft.Web.WebView2** de NuGet y
+  el runtime de WebView2. CMake lo busca con `NEEDS_WEBVIEW2`; si falta, el
+  mensaje indica qué instalar y dónde (`JUCE_WEBVIEW2_PACKAGE_LOCATION`).
 - El proyecto declara `LANGUAGES C CXX` porque JUCE 9 exige compilador de C.
 - Artefactos en `build-plugin/bdmcs48se_instrument_artefacts/Release/`:
   `Standalone/BDMCS48SE Instrument.exe` y `VST3/BDMCS48SE Instrument.vst3`.
@@ -105,18 +158,17 @@ se ha elegido por ti.
 
 ## Verificación
 
-- Suite headless del core: **119 tests** (CPU, paquetes, host, voz y audio),
-  con la afinación de A2/A3/A4/A5 y el silencio tras soltar.
-- `plugin_smoke`: construye el processor, envía un `noteOn` y mide 440 Hz en la
-  salida; comprueba el canal derecho y el silencio tras `noteOff`.
-- Build Release de VST3 + Standalone correcto con JUCE 9.0.4 y MSVC 19.51.
+- Suite headless del core: **132 tests** (CPU, paquetes, host, voz, matriz y
+  audio), con la afinación de A2/A3/A4/A5 y el silencio tras soltar.
+- `plugin_smoke`: MIDI → audio (440 Hz, silencio tras soltar), matriz (disparo,
+  probabilidad 0, delay de 100 ms, mutación increment), recursos embebidos,
+  contrato del puente y roundtrip de estado/matriz.
+- Build Release de VST3 + Standalone correcto con JUCE 9.0.4, MSVC 19.51 y
+  WebView2. El editor se ha arrancado en Standalone; falta probarlo dentro de un
+  DAW real.
 
 ## Pendiente (no incluido a propósito)
 
-- **Interfaz**: `hasEditor()` devuelve `false` y `createEditor()` `nullptr`.
-  El processor ya expone `currentNote()`, `currentFrequency()`, `sounding()`,
-  `level()`, `firmwareLabel()`, `statusLine()`, `loadPackage()`,
-  `resetMachine()` y `parameters()` para engancharla.
 - Pitch bend, glide y velocity con curva.
 - Puerta dentro del firmware (leer un latch) en vez de solo envolvente.
 - Presets que guarden hash/ID de firmware y no solo la ruta.

@@ -2,7 +2,7 @@
 
 **BDMCS48SE** (*Bus/Data MCS-48 Sound Engine*) es el nombre de trabajo de un proyecto para crear instrumentos musicales a partir de firmware MCS-48. El repositorio de GitHub es [ajabadia/ABDMCS48SE](https://github.com/ajabadia/ABDMCS48SE); la decisión final sobre el nombre del producto sigue abierta.
 
-> **Estado:** núcleo headless, firmware propio, host de referencia, esqueleto de plugin JUCE (sin interfaz) y CI multi-plataforma. Windows, Linux (GCC y Clang) y macOS compilan y pasan la suite; el plugin JUCE solo se ha verificado en Windows.
+> **Estado:** núcleo headless, firmware propio, host de referencia, plugin JUCE con editor WebView (matriz de comandos, teclado, estado y presets) y CI multi-plataforma. Windows, Linux (GCC y Clang) y macOS compilan y pasan la suite; el plugin JUCE solo se ha verificado en Windows.
 
 ## Visión
 
@@ -85,7 +85,7 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-- Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone, más la prueba `plugin_smoke`.
+- Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone (editor WebView con recursos embebidos), más la prueba `plugin_smoke`. En Windows hace falta el paquete NuGet **Microsoft.Web.WebView2** y su runtime.
 - `.github/workflows/ci.yml` compila y prueba en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang, y sube los logs de CTest como artefacto cuando algo falla.
 - Estado por plataforma: CI en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una) desde el primer run. En local, Windows está verificado en Debug y Release (119/119) con el plugin JUCE y el benchmark de humo (~160× tiempo real).
 

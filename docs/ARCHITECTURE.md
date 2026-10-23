@@ -150,7 +150,7 @@ segmento, no al principio del bloque entero.
 
 ### Protocolo frontend
 
-El protocolo de UI debe ser tipado y versionado antes de estabilizarse. Debe separar:
+El protocolo de UI es tipado y versionado. Debe separar:
 
 | Canal | Ejemplos | Mecanismo conceptual | Frecuencia |
 |---|---|---|---|
@@ -161,6 +161,34 @@ El protocolo de UI debe ser tipado y versionado antes de estabilizarse. Debe sep
 | Archivo/preset | seleccionar ROM, guardar/restaurar estado | host/message thread | bajo demanda |
 
 Nunca enviar audio muestra a muestra, punteros internos del core ni archivos de ROM al frontend.
+
+### Versión del contrato (implementada)
+
+La versión vive en `source/plugin/UiProtocol.h` (`kUiProtocolVersion`) y viaja
+en el propio documento:
+
+```json
+{
+  "protocol": 1,
+  "gain": -6.0,
+  "release": 80.0,
+  "rows": [ { "note": 60, "target": "engine_clock", "value": 1.0,
+              "probability": 1.0, "delayMs": 0,
+              "mutation": "none", "mutationAmount": 0.0 } ],
+  "firmware": { "label": "…", "id": "…", "hash": "…" },
+  "engine": { "pc": 0, "a": 0, "psw": 0, "bank": 0, "cycles": 0 },
+  "presets": [ "Init" ]
+}
+```
+
+- `stateJson()` (respuesta a `getState`) y `presetsJson()` (respuesta a
+  `listPresets`) declaran `protocol`.
+- La página compara el valor con su propia constante al recibir el primer
+  estado; si no coincide muestra el error y no pinta controles. Así una
+  página vieja contra un backend nuevo falla de forma visible, no silenciosa.
+- Subir la versión solo ante un cambio incompatible (campos renombrados o
+  eliminados, significado distinto). Añadir campos opcionales no obliga;
+  ambos lados ignoran lo que no conocen.
 
 ## ROMs, firmware y licencias
 
