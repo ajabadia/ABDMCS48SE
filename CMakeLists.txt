@@ -78,7 +78,8 @@ target_link_libraries(bdmcs48_machines PUBLIC bdmcs48_core bdmcs48_core_impl bdm
 # plugin solo aporta el AudioProcessor y el editor.
 # ---------------------------------------------------------------------------
 add_library(bdmcs48_instrument STATIC
-    source/instrument/MonoVoice.cpp)
+    source/instrument/MonoVoice.cpp
+    source/instrument/CommandMatrix.cpp)
 target_link_libraries(bdmcs48_instrument PUBLIC bdmcs48_core)
 
 # ---------------------------------------------------------------------------
@@ -136,18 +137,36 @@ if(ABDMCS48SE_BUILD_PLUGIN)
         IS_MIDI_EFFECT FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE
         COPY_PLUGIN_AFTER_BUILD FALSE
+        NEEDS_WEB_BROWSER TRUE
+        NEEDS_WEBVIEW2 TRUE
         PLUGIN_MANUFACTURER_CODE Abms
         PLUGIN_CODE Bd48
         FORMATS Standalone VST3
         PRODUCT_NAME "BDMCS48SE Instrument")
 
+    # La pagina del editor viaja dentro del binario: el plugin no necesita un
+    # directorio WebUI/ al lado del VST3 ni del Standalone.
+    juce_add_binary_data(bdmcs48se_webui SOURCES
+        source/webui/index.html
+        source/webui/main.js
+        source/webui/main.css)
+
     target_sources(bdmcs48se_instrument PRIVATE
-        source/plugin/PluginProcessor.cpp)
+        source/plugin/PluginProcessor.cpp
+        source/plugin/PluginEditor.cpp
+        source/plugin/WebViewBridge.cpp
+        source/webui/WebUIResources.cpp)
 
     target_compile_definitions(bdmcs48se_instrument PUBLIC
-        JUCE_WEB_BROWSER=0
+        BDMCS48SE_HAS_EDITOR=1
+        JUCE_WEB_BROWSER=1
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0)
+    if(WIN32)
+        # Activa el backend WebView2 y, con el, el ResourceProvider: sin esta
+        # macro JUCE usa el backend antiguo de IE y no sirve recursos locales.
+        target_compile_definitions(bdmcs48se_instrument PUBLIC JUCE_USE_WIN_WEBVIEW2=1)
+    endif()
 
     target_link_libraries(bdmcs48se_instrument
         PRIVATE
@@ -155,7 +174,10 @@ if(ABDMCS48SE_BUILD_PLUGIN)
             bdmcs48_instrument
             bdmcs48_machines
             bdmcs48_firmware
-            juce::juce_audio_utils)
+            bdmcs48se_webui
+            juce::juce_audio_utils
+            juce::juce_audio_devices
+            juce::juce_gui_extra)
 
     target_include_directories(bdmcs48se_instrument PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/source)
 endif()
@@ -172,6 +194,7 @@ if(ABDMCS48SE_BUILD_TESTS)
         tests/TestJsonAndSha256.cpp
         tests/TestFirmwarePackage.cpp
         tests/TestMonoVoice.cpp
+        tests/TestCommandMatrix.cpp
         tests/TestInstrument.cpp
         tests/TestEndToEnd.cpp
         tests/TestToyRom.cpp
@@ -197,7 +220,11 @@ if(ABDMCS48SE_BUILD_TESTS)
             PRODUCT_NAME "bdmcs48se_plugin_smoke")
         target_sources(bdmcs48se_plugin_smoke PRIVATE
             tests/PluginSmokeTest.cpp
-            source/plugin/PluginProcessor.cpp)
+            source/plugin/PluginProcessor.cpp
+            source/plugin/WebViewBridge.cpp
+            source/webui/WebUIResources.cpp)
+        target_link_libraries(bdmcs48se_plugin_smoke PRIVATE            bdmcs48se_webui)
+        target_link_libraries(bdmcs48se_plugin_smoke PRIVATE juce::juce_audio_devices)
         target_compile_definitions(bdmcs48se_plugin_smoke PRIVATE
             JUCE_WEB_BROWSER=0
             JUCE_USE_CURL=0)

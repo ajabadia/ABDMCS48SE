@@ -128,9 +128,10 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 - [ ] Integrar CLI/core en una ruta de render consistente con el plugin.
 - [ ] Establecer serialización de estado/presets con referencia y hash de ROM/profile, nunca con datos de ROM comercial incrustados. Parcial: se guardan gain, release y la ruta del firmware, sin hash.
 - [ ] Verificar carga, reset, audio y recuperación ante ROM ausente en Standalone y VST3. Parcial: VST3 y Standalone compilan y la prueba headless `plugin_smoke` valida MIDI y audio; falta abrirlos en un host real.
-- [x] Documentar requisitos de threading y ownership entre Processor, editor y máquina. Evidencia: `docs/INSTRUMENT_SKELETON.md` (el editor aún no existe).
+- [x] Documentar requisitos de threading y ownership entre Processor, editor y máquina. Evidencia: `docs/INSTRUMENT_SKELETON.md`.
+- [x] Editor JUCE mínimo con WebView: matriz de comandos, teclado de dos octavas, gain/release, panel de estado y presets. Evidencia: `source/plugin/PluginEditor.*`, `source/webui/` y `plugin_smoke` (recursos embebidos, contrato del puente y matriz).
 
-**Estado:** esqueleto técnico sin interfaz (2026-10-22). El camino MIDI → voz → reloj → firmware → audio está probado headless; la UI queda pendiente de instrucciones.
+**Estado:** instrumento con editor WebView (2026-10-23). El camino MIDI → voz → reloj → firmware → audio y la matriz están probados headless; el editor se ha arrancado en Standalone con WebView2.
 
 **Criterio de salida:** plugin mínimo y CLI usan el mismo core, audio estable y parámetros/MIDI probados sin WebView.
 
@@ -214,5 +215,6 @@ El core no depende de JUCE, MIDI, VST3, WebView, JSON ni ficheros. La UI no llam
 | Fecha | Hito | Evidencia / notas |
 |---|---|---|
 | 2026-10-21 | Visión inicial y restricciones reunidas | Información del usuario; pendientes de validación externa y decisiones abiertas. |
+| 2026-10-23 | Editor WebView y matriz de comandos funcional | `docs/INSTRUMENT_SKELETON.md`; 8 filas nota → comando con probabilidad, delay y mutación en el host; puente JSON (`WebViewBridge`) y página embebida con `juce_add_binary_data`; suite 132/132 en Debug y Release, `plugin_smoke` con disparo, delay, mutación, recursos y roundtrip; Standalone abre con WebView2. |
 | 2026-10-22 | Portabilidad + CI preparado (CI en verde en cuatro plataformas) | CMake portable y sockets aislados en `source/host/`; tests sin cabeceras de Winsock; matriz Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang en `.github/workflows/ci.yml`. Windows local: Debug y Release 119/119, CTest 2/2, benchmark de humo 512 muestras en 0,067 ms (~160× tiempo real). Primer run de CI: los cuatro trabajos en verde, CTest 2/2 en cada uno, sin cambios en la rama POSIX. |
 | 2026-10-22 | Esqueleto del instrumento monofónico (MIDI + JUCE, sin UI) | `docs/INSTRUMENT_SKELETON.md`; firmware de voz propio, voz monofónica, `engine_clock` corregido, ejecución de CPU hasta ciclos absolutos, liberación que no se alarga al repetir el parámetro, VST3 + Standalone con JUCE 9.0.4 y prueba `plugin_smoke`. |

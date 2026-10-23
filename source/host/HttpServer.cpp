@@ -48,6 +48,10 @@ bool socketsReady(std::string& error) {
         error = "WSAStartup fallo con codigo " + std::to_string(result);
         return false;
     }
+#else
+    // En POSIX no hay inicializacion de sockets; el parametro existe para que
+    // la firma sea la misma en ambas plataformas.
+    (void)error;
 #endif
     return true;
 }
