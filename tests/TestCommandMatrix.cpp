@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 #include "instrument/CommandMatrix.h"
