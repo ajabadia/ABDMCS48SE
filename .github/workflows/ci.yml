@@ -1,9 +1,12 @@
 name: CI
 
 # Compila y ejecuta la suite en Windows/MSVC, Linux/GCC, Linux/Clang y
-# macOS/Clang. El proyecto no tiene dependencias externas (ni JUCE, ni JSON,
-# ni Google Benchmark), asi que no hace falta instalar nada mas que el
-# compilador y CMake que ya traen los runners.
+# macOS/Clang. El core no tiene dependencias externas (ni JUCE, ni JSON, ni
+# Google Benchmark), asi que para esa matriz no hace falta instalar nada mas
+# que el compilador y CMake que ya traen los runners.
+#
+# El job webui si necesita red: compila la pagina con Vite y clona el
+# checkout publico de ABDShared, que es de donde sale el keybed compartido.
 
 on:
   push:
@@ -68,3 +71,55 @@ jobs:
           name: ctest-logs-${{ strategy.job-index }}
           path: build/Testing/Temporary/
           if-no-files-found: ignore
+
+  # La pagina del plugin se empaqueta antes de CMake y se embebe en el
+  # binario. Sin este job, un cambio en WebUI/ que no compila —o una rotura en
+  # el keybed compartido— solo se ve al configurar el plugin en Windows.
+  webui:
+    name: WebUI / Vite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ABDShared se clona dentro del workspace porque actions/checkout no
+      # escribe fuera de el. La pagina lo monta por alias, no como copia: si
+      # cambia y rompe el keybed, este job lo detecta.
+      - name: Checkout ABDShared
+        uses: actions/checkout@v4
+        with:
+          repository: ajabadia/ABDShared
+          path: .ci/ABDShared
+          fetch-depth: 1
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: WebUI/package-lock.json
+
+      - name: Install
+        working-directory: WebUI
+        run: npm ci
+
+      - name: Build WebUI
+        env:
+          # Ruta relativa a la raiz del repo (npm ejecuta el build en WebUI/).
+          ABD_SHARED_DIR: .ci/ABDShared
+        run: node Scripts/build_webui.js
+
+      # Que el comando termine no dice que el bundle sirva. Se comprueba lo
+      # que CMake va a embeber: documento, JS y CSS, con el keybed montado y
+      # su hoja de estilos dentro.
+      - name: Check the embedded bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in WebUI/dist/index.html WebUI/dist/assets/index.js WebUI/dist/assets/index.css; do
+            test -s "$file" || { echo "falta $file"; exit 1; }
+          done
+          grep -q 'id="piano-keyboard"' WebUI/dist/index.html
+          grep -q 'kbd-keys-wrapper' WebUI/dist/assets/index.css
+          grep -q 'assets/index.js' WebUI/dist/index.html

@@ -87,7 +87,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 - Con `-DABDMCS48SE_BUILD_PLUGIN=ON` se añaden el VST3 y el Standalone (editor WebView con el bundle de Vite embebido), más la prueba `plugin_smoke`. En Windows hace falta el paquete NuGet **Microsoft.Web.WebView2** y su runtime.
 - El editor se escribe en `WebUI/` y su build es un paso previo a CMake: `npm --prefix WebUI install` una vez, y `node Scripts/build_webui.js` en cada cambio de UI. Genera `WebUI/dist` (ignorado por Git), que es lo que se embebe; sin ese directorio la configuración falla a propósito.
-- La UI monta el keybed compartido de **ABDShared** (`@abdsynths/midi-keyb`), el mismo que ABDMS2000; no hay copia en este repo. El build lo resuelve desde el checkout hermano `../ABDShared` o desde `ABD_SHARED_DIR` (`node Scripts/build_webui.js` falla con un mensaje claro si no lo encuentra).
+- La UI monta el keybed compartido de **ABDShared** (`@abdsynths/midi-keyb`), el mismo que ABDMS2000; no hay copia en este repo. El build lo resuelve desde el checkout hermano `../ABDShared` o desde `ABD_SHARED_DIR`, relativo a la raíz del repo (`node Scripts/build_webui.js` falla con un mensaje claro si no lo encuentra).
+- El job `webui` de CI clona `ajabadia/ABDShared` en `.ci/ABDShared`, compila la página y comprueba el bundle antes de que lo embeba CMake; un cambio en la UI o en el keybed compartido que rompa la página falla ahí, no en el primer build del plugin.
 - `.github/workflows/ci.yml` compila y prueba en Linux/GCC, Linux/Clang, Windows/MSVC y macOS/Clang, y sube los logs de CTest como artefacto cuando algo falla.
 - Estado por plataforma: CI en verde en las cuatro entradas de la matriz (CTest 2/2 en cada una) desde el primer run. En local, Windows está verificado en Debug y Release (119/119) con el plugin JUCE y el benchmark de humo (~160× tiempo real).
 
@@ -97,6 +98,7 @@ ctest --test-dir build -C Release --output-on-failure
 - [Arquitectura](docs/ARCHITECTURE.md): límites entre core, perfiles, host y frontend.
 - [Paquete de firmware](docs/FIRMWARE_PACKAGE.md): propuesta de manifest, validación, bancos MCS-48 y ciclo de vida/hot swap (aún no normativa).
 - [Esqueleto del instrumento](docs/INSTRUMENT_SKELETON.md): cadena MIDI → voz → CPU → DAC, afinación, hilos y build del VST3/Standalone.
+- [Teclado compartido](docs/KEYBED.md): cómo se monta el keybed de ABDShared, el contrato de altura y qué revisar al actualizarlo.
 - [Decisiones y preguntas abiertas](docs/DECISIONS_AND_QUESTIONS.md): acuerdos, supuestos y temas que iremos resolviendo.
 
 El roadmap es vivo: los hitos solo se marcan como completados cuando se cumple su criterio y se anota evidencia, incluida la que falta por verificar.

@@ -19,9 +19,11 @@ const webUiRoot = path.dirname(fileURLToPath(import.meta.url));
 // El keybed NO se copia aqui: se monta el paquete compartido de ABDShared, el
 // mismo que usa ABDMS2000 (`@abdsynths/midi-keyb`). Como este repo no es un
 // workspace de ABDSynths, la resolucion se hace con alias sobre el checkout
-// hermano. ABD_SHARED_DIR permite apuntar a otra copia (CI, otra maquina).
+// hermano. ABD_SHARED_DIR permite apuntar a otra copia (CI, otra maquina);
+// una ruta relativa se resuelve contra la raiz del repo, no contra WebUI/,
+// porque npm ejecuta el build con cwd=WebUI.
 const sharedRoot = process.env.ABD_SHARED_DIR
-  ? path.resolve(process.env.ABD_SHARED_DIR)
+  ? path.resolve(webUiRoot, '..', process.env.ABD_SHARED_DIR)
   : path.resolve(webUiRoot, '../../ABDShared');
 
 const keyboardSource = path.join(sharedRoot, 'Code', 'MidiKeyboard', 'src', 'keyboard.js');

@@ -52,6 +52,9 @@ Desktop.ini
 WebUI/node_modules/
 WebUI/dist/
 
+# Checkout de ABDShared para el job de CI del WebUI
+.ci/
+
 # Caches and temporary files
 .cache/
 .cache-*/
