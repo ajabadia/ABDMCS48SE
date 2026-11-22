@@ -173,8 +173,8 @@ jobs:
         with:
           name: bdmcs48se-plugin-windows-x64
           path: |
-            build/bdmcs48se_instrument_artefacts/Release/VST3/
-            build/bdmcs48se_instrument_artefacts/Release/Standalone/
+            build/bdmcs48se_instrument_artefacts/**/VST3/
+            build/bdmcs48se_instrument_artefacts/**/Standalone/
           if-no-files-found: warn
 
   sanitizers-asan-ubsan:

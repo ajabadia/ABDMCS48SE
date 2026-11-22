@@ -51,6 +51,7 @@ TEST(MachineExchange, PublicaEInstala) {
     CHECK_EQ(exchange.swapCount(), std::uint64_t{1});
     // La maquina nueva sigue viva: la destruiria el intercambio.
     CHECK_EQ(gAlive, 1);
+    delete installed;
 }
 
 TEST(MachineExchange, LaMaquinaRetiradaNoSeDestruyeHastaQueSeDrena) {
@@ -81,6 +82,7 @@ TEST(MachineExchange, LaMaquinaRetiradaNoSeDestruyeHastaQueSeDrena) {
     CHECK_EQ(gDestroyed, 1);
     CHECK_EQ(gAlive, 1);
     CHECK_EQ(exchange.retiredPending(), std::size_t{0});
+    delete installed;
 }
 
 TEST(MachineExchange, SoloSeAceptaUnaPendiante) {
@@ -132,4 +134,5 @@ TEST(MachineExchange, ColaDeRetiroLlenaDifiereElCambio) {
     MachineInstance* installed2 = exchange.swapAtBlockBoundary(current);
     CHECK_EQ(installed2, raw);
     CHECK_EQ(exchange.swapCount(), std::uint64_t{4});
+    delete installed2;
 }
