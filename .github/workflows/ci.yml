@@ -162,7 +162,7 @@ jobs:
 
       - name: Build JUCE Plugin and Smoke Test
         shell: bash
-        run: cmake --build build --config Release --target bdmcs48se_instrument bdmcs48se_plugin_smoke --parallel
+        run: cmake --build build --config Release --target bdmcs48se_instrument_All bdmcs48se_plugin_smoke --parallel
 
       - name: Run Plugin Smoke Test
         shell: bash
@@ -173,8 +173,8 @@ jobs:
         with:
           name: bdmcs48se-plugin-windows-x64
           path: |
-            build/bdmcs48se_instrument_artefacts/**/VST3/
-            build/bdmcs48se_instrument_artefacts/**/Standalone/
+            build/bdmcs48se_instrument_artefacts/Release/VST3/
+            build/bdmcs48se_instrument_artefacts/Release/Standalone/
           if-no-files-found: warn
 
   sanitizers-asan-ubsan:
