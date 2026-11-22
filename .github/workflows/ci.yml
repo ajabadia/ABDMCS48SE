@@ -146,13 +146,19 @@ jobs:
           name: webui-dist
           path: WebUI/dist
 
+      - name: Install WebView2 SDK
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory packages
+
       - name: Configure CMake with JUCE Plugin
         shell: bash
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
             -DABDMCS48SE_BUILD_PLUGIN=ON \
             -DABDMCS48SE_BUILD_TESTS=ON \
-            -DABDMCS48SE_BUILD_BENCHMARKS=OFF
+            -DABDMCS48SE_BUILD_BENCHMARKS=OFF \
+            -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ github.workspace }}/packages"
 
       - name: Build JUCE Plugin and Smoke Test
         shell: bash

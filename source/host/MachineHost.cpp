@@ -29,9 +29,13 @@ MachineHost::MachineHost(Config config) : config_(config) {}
 
 MachineHost::~MachineHost() {
     // La maquina activa la destruye el host: el hilo de audio ya termino.
-    owned_.reset();
+    if (owned_ && owned_.get() == active_) {
+        owned_.release();
+    }
+    delete active_;
     active_ = nullptr;
-    exchange_.drainRetired();
+    owned_.reset();
+    while (exchange_.drainRetired() > 0) {}
 }
 
 bool MachineHost::loadPackage(const std::string& packageRoot, std::string& error) {
