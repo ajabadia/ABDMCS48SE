@@ -11,15 +11,17 @@
 
 | Pieza | Fichero | Responsabilidad |
 |---|---|---|
-| Voz monofónica | `source/instrument/MonoVoice.*` | Nota MIDI → escala del reloj, prioridad de última nota, envolvente de puerta. Sin JUCE. |
+| Voz monofónica | `source/instrument/MonoVoice.*` | Nota MIDI → escala del reloj, prioridad de última nota, envolvente de puerta, glide legato exponencial y 4 curvas de velocidad (Linear, Exp, Log, Stepped). Sin JUCE. |
 | Firmware de voz | `source/firmware/demo/MonoVoiceFirmware.*` | ROM original de 16 bytes: onda cuadrada simétrica. Paquete en memoria, sin escribir en disco. |
-| Processor | `source/plugin/PluginProcessor.*` | `juce::AudioProcessor`, APVTS (gain/release), MIDI con offsets, DC blocker, carga de paquetes y estado. |
+| Perfil y Tolerancia DAC | `source/machines/GenericMcs48Machine.*` | CPU MCS-48, red R-2R con DNL/INL determinista y saturación analógica $\tanh$ precalculada en LUT de 256 estados (`dacTolerance`). |
+| Processor | `source/plugin/PluginProcessor.*` | `juce::AudioProcessor`, APVTS (10 parámetros), sub-chunking de audio a 16 muestras en glide, MIDI con offsets, DC blocker, presets de fábrica, carga de paquetes y volcado/recepción SysEx. |
 | Matriz de comandos | `source/instrument/CommandMatrix.*` | 8 filas nota → comando con probabilidad, delay y mutación. Sin JUCE ni MIDI: recibe notas ya extraídas. |
-| Editor WebView | `source/plugin/PluginEditor.*` | `WebBrowserComponent`, `ResourceProvider` sobre el bundle embebido, fallback a disco en desarrollo y despacho de funciones nativas. |
-| Puente JSON | `source/plugin/WebViewBridge.*` | Contrato tipado C++ ↔ JS: estado, filas, parámetros, notas y presets. C++ valida y aplica. |
-| Página | `WebUI/index.html`, `WebUI/src/` | Teclado de dos octavas, matriz de 8 filas, panel de estado y presets. Vite lo empaqueta en `WebUI/dist`, que se embebe con `juce_add_binary_data`. |
+| Editor WebView | `source/plugin/PluginEditor.*` | `WebBrowserComponent`, `ResourceProvider` sobre el bundle embebido, fallback a disco en desarrollo y despacho de funciones nativas (incluye SysEx y Drag-and-Drop). |
+| Puente JSON | `source/plugin/WebViewBridge.*` | Contrato tipado C++ ↔ JS: estado, filas, parámetros, notas, presets, SysEx y conversión en caliente de ROMs. |
+| Página | `WebUI/index.html`, `WebUI/src/` | Teclado canónico, matriz de 8 filas, panel de voz (8 knobs + tono 440 Hz + conmutador de curva de velocidad), scope/VU, drawer de firmwares y drag-and-drop. |
 | Mapeo de recursos | `source/webui/WebUIResources.*` | Ruta HTTP → bytes + MIME sobre el bundle; sin JUCE para poder probarlo desde `plugin_smoke`. |
 | Prueba headless | `tests/PluginSmokeTest.cpp` | MIDI → processor → audio, matriz (disparo, delay, probabilidad, mutación), recursos embebidos y roundtrip de estado. |
+| Suite de Conformidad | `tests/TestJuno6DecodingConformance.cpp` | Verificación contra listado golden (1 089 instrucciones, 155 opcodes) y mapa formal de regiones de memoria. |
 | Build | `CMakeLists.txt` | `ABDMCS48SE_BUILD_PLUGIN` (OFF por defecto), JUCE 9.0.4 por FetchContent, formatos Standalone y VST3. |
 
 Cambios en el core que el instrumento necesitaba:
@@ -195,7 +197,6 @@ se ha elegido por ti.
 
 ## Pendiente (no incluido a propósito)
 
-- Pitch bend, glide y velocity con curva.
-- Puerta dentro del firmware (leer un latch) en vez de solo envolvente.
-- Presets que guarden hash/ID de firmware y no solo la ruta.
+- Puerta dentro del firmware (leer un latch) en vez de solo envolvente analógica.
+- Presets que guarden hash/ID de firmware y no solo la ruta en disco (comenzado con paquetes binarios).
 - Medición de varias instancias y estrés de colas en un DAW real.

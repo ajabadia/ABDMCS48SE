@@ -26,8 +26,10 @@ namespace bdmcs48::instrument {
 // identificador de comando que espera MachineHost: los parametros del perfil
 // viajan con 0x1000+ y las entradas de maquina con su id directo.
 enum class MatrixTarget : std::uint8_t {
-    EngineClock = 0, // escala del reloj de la CPU
-    LatchWrite = 1,  // latch de entrada 0 del perfil
+    EngineClock = 0, // escala del reloj de la CPU (Clock Bend)
+    LatchWrite = 1,  // latch de entrada 0 del perfil (Latch Mutation)
+    DacQuantize = 2, // cuantizacion de bits del DAC (1 a 8 bits)
+    Freeze = 3,      // congelacion de la ejecucion de la CPU (0 = run, 1 = freeze)
 };
 
 enum class MatrixMutation : std::uint8_t {
@@ -68,10 +70,16 @@ public:
     static constexpr float kEngineClockMaxScale = 8.0f;
     static constexpr float kLatchMin = 0.0f;
     static constexpr float kLatchMax = 255.0f;
+    static constexpr float kDacQuantizeMin = 1.0f;
+    static constexpr float kDacQuantizeMax = 8.0f;
+    static constexpr float kFreezeMin = 0.0f;
+    static constexpr float kFreezeMax = 1.0f;
 
     // Identificadores del contrato de MachineHost.
     static constexpr std::uint32_t kEngineClockCommandId = 0x1000u + 1u;
     static constexpr std::uint32_t kLatchWriteCommandId = 0u;
+    static constexpr std::uint32_t kDacQuantizeCommandId = 0x1000u + 3u;
+    static constexpr std::uint32_t kFreezeCommandId = 0x1000u + 4u;
 
     struct Command {
         std::uint32_t id = 0;

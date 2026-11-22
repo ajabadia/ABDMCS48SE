@@ -22,6 +22,8 @@
 namespace bdmcs48::core {
 
 struct MachineSnapshot {
+    static constexpr std::size_t kMessageCapacity = 48;
+
     std::uint64_t frameCounter = 0;
     std::uint64_t cpuCycles = 0;
     std::uint32_t programCounter = 0;
@@ -30,13 +32,16 @@ struct MachineSnapshot {
     std::uint8_t bank = 0;
     std::uint8_t faulted = 0;
     float outputLevel = 0.0f;
-    std::string message;
+    float peakLevel = 0.0f;
+    float rmsLevel = 0.0f;
+    std::int8_t waveform[8] = {0};
+    char message[kMessageCapacity] = {0};
 };
 
 class SnapshotChannel {
 public:
     static constexpr std::size_t kWords = 12;
-    static constexpr std::size_t kMessageChars = 40;
+    static constexpr std::size_t kMessageChars = 48;
 
     // Hilo de audio.
     void publish(const MachineSnapshot& snapshot);

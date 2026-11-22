@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/Mcs48Timer.h"
@@ -119,7 +120,8 @@ public:
 
     bool faulted() const { return fault_ != CpuFault::None; }
     CpuFault fault() const { return fault_; }
-    const std::string& faultMessage() const { return faultMessage_; }
+    std::string_view faultMessage() const noexcept { return faultMessage_; }
+    const char* faultMessageCStr() const noexcept { return faultMessage_; }
 
     std::uint32_t clockHz() const { return config_.clockHz; }
     std::uint32_t clocksPerCycle() const { return config_.clocksPerCycle; }
@@ -131,10 +133,13 @@ public:
     const Mcs48Timer& timer() const { return timer_; }
 
 private:
+    static constexpr std::size_t kFaultMessageCapacity = 48;
+
     std::uint8_t fetch();
     std::uint8_t fetchArgument();
     void execute(std::uint8_t opcode);
-    void raiseFault(CpuFault fault, std::string message);
+    void raiseFault(CpuFault fault, std::string_view message);
+    void raiseFault(CpuFault fault, const char* message);
 
     void executeJmp(std::uint16_t address);
     void executeJcc(bool condition);
@@ -164,7 +169,7 @@ private:
     // "pila llena" de "pila vacia" y poder avisar del error de firmware.
     std::uint8_t stackDepth_ = 0;
     CpuFault fault_ = CpuFault::None;
-    std::string faultMessage_;
+    char faultMessage_[kFaultMessageCapacity] = {0};
 };
 
 } // namespace bdmcs48::core

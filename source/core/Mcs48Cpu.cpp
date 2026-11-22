@@ -1,6 +1,7 @@
 #include "core/Mcs48Cpu.h"
 
 #include <cstdio>
+#include <cstring>
 
 namespace bdmcs48::core {
 namespace {
@@ -44,15 +45,23 @@ void Mcs48Cpu::reset() {
     timer_.reset();
     stackDepth_ = 0;
     fault_ = CpuFault::None;
-    faultMessage_.clear();
+    std::memset(faultMessage_, 0, sizeof(faultMessage_));
 }
 
-void Mcs48Cpu::raiseFault(CpuFault fault, std::string message) {
+void Mcs48Cpu::raiseFault(CpuFault fault, std::string_view message) {
     if (fault_ != CpuFault::None) {
         return; // se conserva el primer fallo: es el que explica la parada
     }
     fault_ = fault;
-    faultMessage_ = std::move(message);
+    const std::size_t len = message.size() < sizeof(faultMessage_) - 1 ? message.size() : sizeof(faultMessage_) - 1;
+    if (len > 0) {
+        std::memcpy(faultMessage_, message.data(), len);
+    }
+    faultMessage_[len] = '\0';
+}
+
+void Mcs48Cpu::raiseFault(CpuFault fault, const char* message) {
+    raiseFault(fault, std::string_view(message != nullptr ? message : ""));
 }
 
 std::uint8_t Mcs48Cpu::fetch() {

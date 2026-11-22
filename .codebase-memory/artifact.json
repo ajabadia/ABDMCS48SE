@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "291336af5a11c04cc2e310f4459bd2440c271ba6",
-    "indexed_at": "2026-10-22T09:58:05Z",
+    "commit": "9d4e8b363ca0c68f05a20d39c9abf599a8fd9845",
+    "indexed_at": "2026-11-22T01:04:58Z",
     "project": "D-desarrollos-ABDSynths-ABDMCS48SE",
-    "nodes": 1071,
-    "edges": 3358,
-    "original_size": 4915200,
-    "compressed_size": 801958,
+    "nodes": 1970,
+    "edges": 6134,
+    "original_size": 7274496,
+    "compressed_size": 1413728,
     "compression_level": 9
 }

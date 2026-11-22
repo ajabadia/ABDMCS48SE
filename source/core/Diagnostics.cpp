@@ -27,16 +27,22 @@ void SnapshotChannel::encode(const MachineSnapshot& snapshot, std::uint64_t* wor
                (static_cast<std::uint64_t>(snapshot.psw) << 24) |
                (static_cast<std::uint64_t>(snapshot.bank) << 32) |
                (static_cast<std::uint64_t>(snapshot.faulted) << 40);
-    words[3] = floatToBits(snapshot.outputLevel);
+    words[3] = static_cast<std::uint64_t>(floatToBits(snapshot.outputLevel)) |
+               (static_cast<std::uint64_t>(floatToBits(snapshot.peakLevel)) << 32);
+    words[4] = static_cast<std::uint64_t>(floatToBits(snapshot.rmsLevel));
+    std::uint64_t waveWord = 0;
+    std::memcpy(&waveWord, snapshot.waveform, sizeof(snapshot.waveform));
+    words[5] = waveWord;
 
-    // El mensaje travels en 5 palabras de 8 caracteres.
+    // El mensaje viaja en 6 palabras (words[6..11])
     const std::size_t messageWords = (kMessageChars + 7) / 8;
-    std::memset(words + 4, 0, messageWords * sizeof(std::uint64_t));
-    const std::size_t length = snapshot.message.size() < kMessageChars ? snapshot.message.size() : kMessageChars;
-    for (std::size_t i = 0; i < length; ++i) {
+    std::memset(words + 6, 0, messageWords * sizeof(std::uint64_t));
+    const std::size_t length = std::strlen(snapshot.message);
+    const std::size_t clamped = length < kMessageChars ? length : kMessageChars;
+    for (std::size_t i = 0; i < clamped; ++i) {
         const std::size_t word = i / 8;
         const std::size_t byte = i % 8;
-        words[4 + word] |= static_cast<std::uint64_t>(static_cast<unsigned char>(snapshot.message[i])) << (byte * 8);
+        words[6 + word] |= static_cast<std::uint64_t>(static_cast<unsigned char>(snapshot.message[i])) << (byte * 8);
     }
 }
 
@@ -48,17 +54,23 @@ void SnapshotChannel::decode(const std::uint64_t* words, MachineSnapshot& out) c
     out.psw = static_cast<std::uint8_t>((words[2] >> 24) & 0xffu);
     out.bank = static_cast<std::uint8_t>((words[2] >> 32) & 0xffu);
     out.faulted = static_cast<std::uint8_t>((words[2] >> 40) & 0xffu);
-    out.outputLevel = bitsToFloat(static_cast<std::uint32_t>(words[3]));
+    out.outputLevel = bitsToFloat(static_cast<std::uint32_t>(words[3] & 0xffffffffu));
+    out.peakLevel = bitsToFloat(static_cast<std::uint32_t>(words[3] >> 32));
+    out.rmsLevel = bitsToFloat(static_cast<std::uint32_t>(words[4] & 0xffffffffu));
+    const std::uint64_t waveWord = words[5];
+    std::memcpy(out.waveform, &waveWord, sizeof(out.waveform));
 
-    out.message.clear();
+    std::memset(out.message, 0, sizeof(out.message));
     const std::size_t messageWords = (kMessageChars + 7) / 8;
+    std::size_t idx = 0;
     for (std::size_t w = 0; w < messageWords; ++w) {
         for (std::size_t byte = 0; byte < 8; ++byte) {
-            const char character = static_cast<char>((words[4 + w] >> (byte * 8)) & 0xffu);
-            if (character == '\0') {
+            const char character = static_cast<char>((words[6 + w] >> (byte * 8)) & 0xffu);
+            if (character == '\0' || idx >= sizeof(out.message) - 1) {
+                out.message[idx] = '\0';
                 return;
             }
-            out.message.push_back(character);
+            out.message[idx++] = character;
         }
     }
 }

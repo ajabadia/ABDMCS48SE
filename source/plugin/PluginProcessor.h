@@ -24,6 +24,7 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_data_structures/juce_data_structures.h>
 
 #include "host/MachineHost.h"
 #include "instrument/CommandMatrix.h"
@@ -106,9 +107,62 @@ public:
 
     // --- Presets del Standalone ------------------------------------------
     juce::StringArray presetNames() const;
+    static juce::StringArray factoryPresetNames();
+    bool loadFactoryPreset(int index, juce::String& error);
     bool savePreset(const juce::String& name, juce::String& error);
     bool loadPreset(const juce::String& name, juce::String& error);
     static juce::File presetDirectory();
+
+    // --- Microcode Drag-and-Drop (.bin / .hex) ----------------------------
+    bool loadRawRomData(const juce::String& filename, const juce::MemoryBlock& romData, juce::String& error);
+
+    // --- SysEx Dump & Restore ---------------------------------------------
+    juce::MidiMessage createSysExDump() const;
+    bool parseAndApplySysEx(const std::uint8_t* data, int sizeInBytes, juce::String& error);
+    void handleSysEx(const std::uint8_t* data, int sizeInBytes);
+
+    // --- Telemetry & Diagnostic Tone (440 Hz) ----------------------------
+    void setDiagnosticToneEnabled(bool enabled) noexcept {
+        diagnosticToneEnabled_.store(enabled, std::memory_order_relaxed);
+        if (auto* param = parameters_.getParameter("diagnosticTone")) {
+            param->setValueNotifyingHost(enabled ? 1.0f : 0.0f);
+        }
+    }
+    bool isDiagnosticToneEnabled() const noexcept {
+        return diagnosticToneEnabled_.load(std::memory_order_relaxed);
+    }
+
+    // --- Firmwares -------------------------------------------------------
+    juce::StringArray firmwareNames() const;
+    bool loadFirmware(const juce::String& name, juce::String& error);
+    static juce::File firmwareDirectory();
+
+    // --- Workspace / Settings --------------------------------------------
+    juce::File workspaceDirectory() const;
+    void setWorkspaceDirectory(const juce::File& directory);
+    juce::String getWorkspaceFolder() const;
+    void setWorkspaceFolder(const juce::String& path);
+
+    // ROM -> Firmware Package conversion (runs on message thread)
+    struct RomToPackageParams {
+        juce::String romPath;
+        juce::String packageId;
+        juce::String packageName;
+        juce::String packageVersion = "1.0.0";
+        juce::String author;
+        juce::String description;
+        juce::String license = "CC0-1.0";
+        juce::String provenance;
+        juce::String profile = "generic-mcs48";
+        juce::String cpuVariant = "8049";
+        int clockHz = 6000000;
+        int bankCount = 2;
+        int bankSizeBytes = 2048;
+        int addressBits = 12;
+    };
+
+    bool convertRomToPackage(const RomToPackageParams& params, juce::String& error);
+    juce::StringArray listRomFiles() const;
 
     // Estado completo en JSON para la WebView. La autoridad es C++.
     juce::String uiStateJson();
@@ -127,6 +181,7 @@ public:
 
     // Identificador del parametro de reloj dentro de la cola de comandos.
     static constexpr std::uint32_t kEngineClockCommand = 0x1000u + 1u;
+    static constexpr std::uint32_t kDacToleranceCommand = 0x1000u + 2u;
 
 private:
     void createParameters();
@@ -157,6 +212,8 @@ private:
 
     std::string pendingPackagePath_;
     std::string pendingStatePath_;
+    std::string pendingStateFirmwareId_;
+    std::string pendingStateFirmwareSha256_;
     std::string loadedPackagePath_;
     juce::String firmwareLabel_ = "MCS-48 Mono Voice";
 
@@ -174,8 +231,18 @@ private:
     std::atomic<std::uint32_t> seedValue_{0x9e3779b9u};
 
     int postedNote_ = -2;
+    std::int32_t postedClockValue_ = -1;
+    float postedDacTolerance_ = -1.0f;
+    float postedDacQuantize_ = -1.0f;
+    float postedFreeze_ = -1.0f;
     float dcX1_ = 0.0f;
     float dcY1_ = 0.0f;
+
+    std::atomic<bool> diagnosticToneEnabled_{false};
+    float diagnosticTonePhase_ = 0.0f;
+
+    juce::PropertiesFile::Options getPropertiesFileOptions() const;
+    std::unique_ptr<juce::PropertiesFile> getPropertiesFile() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InstrumentAudioProcessor)
 };

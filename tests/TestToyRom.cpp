@@ -17,6 +17,8 @@
 
 #include "core/Mcs48Cpu.h"
 #include "core/ProgramMemory.h"
+#include "firmware/demo/DiagnosticFirmware.h"
+#include "host/MachineHost.h"
 
 namespace {
 
@@ -302,4 +304,45 @@ TEST(ToyRom, ElTemporizadorSeArrancaYSeLee) {
     CHECK_EQ(cpu.timer().counter(), std::uint8_t{0x10});
     CHECK_EQ(cpu.accumulator(), std::uint8_t{0x10});
     CHECK_EQ(static_cast<int>(cpu.fault()), static_cast<int>(CpuFault::None));
+}
+
+TEST(ToyRom, RomDeDiagnosticoAutotestRamTimerSaltoBancosYRampaDac) {
+    const auto pkg = bdmcs48::firmware::demo::diagnosticPackage();
+    CHECK_EQ(pkg.manifest.id, std::string("mcs48.test.diagnostic"));
+    CHECK_EQ(pkg.images.size(), std::size_t{2});
+    CHECK_EQ(pkg.images[0].data.size(), std::size_t{2048});
+    CHECK_EQ(pkg.images[1].data.size(), std::size_t{2048});
+    CHECK(!pkg.manifest.images[0].sha256.empty());
+    CHECK(!pkg.manifest.images[1].sha256.empty());
+
+    bdmcs48::host::MachineHost host({48'000, 128});
+    std::string error;
+    CHECK(host.loadPackage(pkg, error));
+    CHECK(error.empty());
+
+    std::vector<float> buffer(128, 0.0f);
+    float* outputs[1] = {buffer.data()};
+
+    // Renderiza 10 bloques (1280 muestras) para completar inicializacion y bucle
+    for (int b = 0; b < 10; ++b) {
+        host.renderBlock(128, outputs, 1);
+    }
+
+    const auto status = host.status();
+    // La CPU no debe haber fallado (paso el autotest de RAM y la verificacion del testigo 0xA5 del banco 1)
+    CHECK_EQ(status.faulted, std::uint8_t{0});
+    // Debe encontrarse ejecutando el bucle de audio en la pagina 0 (0x0050..0x0054)
+    CHECK(status.programCounter >= 0x0050u && status.programCounter <= 0x0055u);
+
+    // Comprueba que las muestras de audio generadas forman una rampa acotada en [-1, 1]
+    bool distinctValues = false;
+    float lastSample = buffer[0];
+    for (std::size_t i = 1; i < buffer.size(); ++i) {
+        CHECK(buffer[i] >= -1.01f && buffer[i] <= 1.01f);
+        if (buffer[i] != lastSample) {
+            distinctValues = true;
+        }
+        lastSample = buffer[i];
+    }
+    CHECK(distinctValues);
 }

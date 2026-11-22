@@ -13,6 +13,9 @@
 
 #pragma once
 
+#include <algorithm>
+
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -44,6 +47,9 @@ public:
 
     // Identificadores de parametro y entrada del perfil.
     static constexpr std::uint32_t kParameterEngineClock = 1;
+    static constexpr std::uint32_t kParameterDacTolerance = 2;
+    static constexpr std::uint32_t kParameterDacQuantize = 3;
+    static constexpr std::uint32_t kParameterFreeze = 4;
     static constexpr std::uint32_t kInputLatch0 = 0;
     static constexpr std::uint32_t kInputLatch1 = 1;
     static constexpr std::size_t kLatchCount = 2;
@@ -79,6 +85,15 @@ public:
     std::uint8_t dacValue() const { return dacValue_; }
     std::uint8_t controlValue() const { return controlValue_; }
 
+    void setDacTolerance(float tolerance);
+    float dacTolerance() const { return dacTolerance_; }
+
+    void setDacQuantize(std::uint8_t bits) { dacQuantizeBits_ = std::clamp<std::uint8_t>(bits, 1, 8); }
+    std::uint8_t dacQuantize() const { return dacQuantizeBits_; }
+
+    void setFreeze(bool frozen) { freeze_ = frozen; }
+    bool isFrozen() const { return freeze_; }
+
     const core::Mcs48Cpu& cpu() const { return cpu_; }
     core::Mcs48Cpu& cpu() { return cpu_; }
 
@@ -98,6 +113,7 @@ public:
 
 private:
     void rebuildClock();
+    void rebuildDacLut();
 
     Config config_;
     core::ProgramMemory program_;
@@ -109,6 +125,10 @@ private:
     std::uint8_t controlValue_ = 0;
     std::uint8_t latches_[kLatchCount] = {0, 0};
     double clockScale_ = 1.0;
+    float dacTolerance_ = 0.0f;
+    std::uint8_t dacQuantizeBits_ = 8;
+    bool freeze_ = false;
+    std::array<float, 256> dacLut_{};
     // Ciclos del CPU en el momento de reconstruir el reloj: runBlock compara
     // contra cycleOffset_ + clock_.totalCycles() para no perder el sobrante de
     // la instruccion en curso entre muestras.

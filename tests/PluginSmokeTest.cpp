@@ -316,9 +316,9 @@ void testRecursosEmbebidos() {
     check(bdmcs48::webui::resourceFor("/", resource), "la raiz sirve index.html");
     check(std::string(resource.mimeType).find("text/html") == 0,
           "index.html se sirve como HTML");
-    check(std::string(resource.data, resource.size).find("Matriz de comandos") !=
+    check(std::string(resource.data, resource.size).find("synthStage") !=
               std::string::npos,
-          "index.html contiene la matriz");
+          "index.html contiene el contenedor synthStage");
     check(std::string(resource.data, resource.size).find("assets/index.js") !=
               std::string::npos,
           "index.html carga el bundle de Vite");
@@ -335,6 +335,9 @@ void testRecursosEmbebidos() {
     check(std::string(resource.data, resource.size).find("getState") !=
               std::string::npos,
           "el bundle pregunta el estado a C++");
+    check(std::string(resource.data, resource.size).find("Matriz de comandos") !=
+              std::string::npos,
+          "el bundle incluye la matriz de comandos");
 
     check(bdmcs48::webui::resourceFor("/assets/index.css", resource),
           "el CSS del bundle esta embebido");

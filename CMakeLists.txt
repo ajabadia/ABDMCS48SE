@@ -23,6 +23,13 @@ endif()
 if(MSVC)
     add_compile_options(/W4 /permissive- /utf-8 /Zc:__cplusplus)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        # Modo x86 de 32 bits: deshabilitar SSE2 (/arch:IA32) para compatibilidad con CPUs embebidas legacy (AMD Geode LX / V-Machine)
+        option(BDMCS48SE_TARGET_IA32 "Desactivar extensiones SSE2 para compatibilidad con V-Machine" ON)
+        if(BDMCS48SE_TARGET_IA32)
+            add_compile_options(/arch:IA32)
+        endif()
+    endif()
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -49,7 +56,9 @@ add_library(bdmcs48_core_impl STATIC
     source/core/CoreClock.cpp
     source/core/Mcs48Timer.cpp
     source/core/MachineExchange.cpp
-    source/core/Diagnostics.cpp)
+    source/core/Diagnostics.cpp
+    source/core/OpcodeNames.cpp
+    source/core/MachineProfile.cpp)
 target_link_libraries(bdmcs48_core_impl PUBLIC bdmcs48_core)
 
 # ---------------------------------------------------------------------------
@@ -62,7 +71,11 @@ add_library(bdmcs48_firmware STATIC
     source/firmware/FirmwarePackage.cpp
     source/firmware/PackageLoader.cpp
     source/firmware/demo/DemoFirmware.cpp
-    source/firmware/demo/MonoVoiceFirmware.cpp)
+    source/firmware/demo/MonoVoiceFirmware.cpp
+    source/firmware/demo/EnhancedMonoVoiceFirmware.cpp
+    source/firmware/demo/MarioBrosFirmware.cpp
+    source/firmware/demo/DiagnosticFirmware.cpp
+    source/firmware/demo/WavetablePercussionFirmware.cpp)
 target_link_libraries(bdmcs48_firmware PUBLIC bdmcs48_core)
 
 # ---------------------------------------------------------------------------
@@ -128,6 +141,25 @@ if(ABDMCS48SE_BUILD_PLUGIN)
         GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(JUCE)
 
+    # Deteccion automatica del SDK VST2 (prioridad: variable CMake, entorno, ABDShared/SDKs, _RESOURCES)
+    if(NOT DEFINED VST2_SDK_PATH)
+        if(DEFINED ENV{VST2_SDK_PATH})
+            set(VST2_SDK_PATH "$ENV{VST2_SDK_PATH}")
+        elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ABDShared/SDKs/vst2sdk/vstsdk2.4")
+            set(VST2_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../ABDShared/SDKs/vst2sdk/vstsdk2.4")
+        elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../_RESOURCES/vst2sdk/vstsdk2.4")
+            set(VST2_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../_RESOURCES/vst2sdk/vstsdk2.4")
+        endif()
+    endif()
+    if(DEFINED VST2_SDK_PATH AND EXISTS "${VST2_SDK_PATH}")
+        juce_set_vst2_sdk_path("${VST2_SDK_PATH}")
+    endif()
+
+    set(BDMCS48SE_PLUGIN_FORMATS Standalone VST3)
+    if(TARGET juce_vst2_sdk)
+        list(APPEND BDMCS48SE_PLUGIN_FORMATS VST)
+    endif()
+
     juce_add_plugin(bdmcs48se_instrument
         COMPANY_NAME "ABDMCS48SE"
         BUNDLE_ID "com.abdmcs48se.instrument"
@@ -141,7 +173,7 @@ if(ABDMCS48SE_BUILD_PLUGIN)
         NEEDS_WEBVIEW2 TRUE
         PLUGIN_MANUFACTURER_CODE Abms
         PLUGIN_CODE Bd48
-        FORMATS Standalone VST3
+        FORMATS ${BDMCS48SE_PLUGIN_FORMATS}
         PRODUCT_NAME "BDMCS48SE Instrument")
 
     # La pagina del editor viaja dentro del binario: el plugin no necesita un
@@ -218,11 +250,42 @@ if(ABDMCS48SE_BUILD_TESTS)
         tests/TestToyRom.cpp
         tests/TestMcs48Faults.cpp
         tests/TestMcs48Timer.cpp
-        tests/TestOpcodeCoverage.cpp)
+        tests/TestOpcodeCoverage.cpp
+        tests/TestOpcodeTable.cpp
+        tests/TestDeterminism.cpp
+        tests/TestAudioInvariants.cpp
+        tests/TestThreadStress.cpp
+        tests/TestFuzzCpu.cpp
+        tests/TestJuno6DecodingConformance.cpp
+        tests/TestWavetablePercussion.cpp)
     target_link_libraries(bdmcs48_tests PRIVATE bdmcs48_host bdmcs48_instrument)
     target_include_directories(bdmcs48_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
         ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    # Los goldens de determinismo viven en el arbol de fuentes, no en el
+    # directorio de build: se pasa la ruta para que CTest los encuentre.
+    target_compile_definitions(bdmcs48_tests PRIVATE
+        BDMCS48SE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+    # Auditoria de la tabla de opcodes contra el desensamblador de MAME
+    # (docs/mame/mcs48dsm.cpp). Va en CTest para que una divergencia se
+    # detecte en CI sin que nadie lance el script a mano. Si docs/mame/ deja
+    # de estar en el arbol, la referencia se sustituye con la variable de
+    # entorno BDMCS48SE_MAME_DSM (o --reference); sin referencia el test falla
+    # con un mensaje explicito en vez de pasar en silencio.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME opcode_table_audit
+            COMMAND Python3::Interpreter
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/juno6_conformance.py --audit)
+        set_tests_properties(opcode_table_audit PROPERTIES
+            TIMEOUT 60
+            LABELS "audit"
+            SKIP_RETURN_CODE 125
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    else()
+        message(STATUS "Python3 no encontrado: se omite el test opcode_table_audit")
+    endif()
 
     # Con enable_testing() el generador de Visual Studio crea el objetivo
     # RUN_TESTS, que es el que build.bat invoca como `--target run_tests`.

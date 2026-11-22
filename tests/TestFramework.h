@@ -12,6 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace test {
@@ -43,7 +44,13 @@ int runAll(const std::string& filter);
 template <typename T>
 std::string describe(const T& value) {
     std::ostringstream stream;
-    stream << value;
+    // Un enum class no tiene operator<<: se imprime su valor entero para que
+    // CHECK_EQ funcione con el sin declarar un operador por cada enum.
+    if constexpr (std::is_enum_v<T>) {
+        stream << static_cast<long long>(value);
+    } else {
+        stream << value;
+    }
     return stream.str();
 }
 

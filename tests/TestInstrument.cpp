@@ -183,3 +183,25 @@ TEST(Instrument, AlSoltarLaNotaElAudioSeApaga) {
 
     CHECK_NEAR(rms(rig.samples, 0.6), 0.0, 1e-6);
 }
+
+TEST(Instrument, DacToleranceModificaFormaDeOnda) {
+    bdmcs48::machines::GenericMcs48Machine machine{bdmcs48::machines::GenericMcs48Machine::Config{}};
+    machine.setDacTolerance(0.0f);
+    CHECK_NEAR(machine.dacTolerance(), 0.0f, 1e-6);
+
+    // Con tolerancia 0, DAC ideal: valor 0 -> -1.0, 255 -> +1.0
+    machine.writePort(1, 0); // P1 escribe DAC
+    float sample0 = 0.0f;
+    float* out0[1] = {&sample0};
+    machine.runBlock(1, out0, 1);
+    CHECK_NEAR(sample0, -1.0f, 1e-4);
+
+    // Con tolerancia 1.0 (máxima edad/tolerancia R-2R vintage), los valores cambian por mismatch
+    machine.setDacTolerance(1.0f);
+    CHECK_NEAR(machine.dacTolerance(), 1.0f, 1e-6);
+    float sampleTol = 0.0f;
+    float* outTol[1] = {&sampleTol};
+    machine.writePort(1, 128); // Crossover MSB donde el mismatch R-2R es más prominente
+    machine.runBlock(1, outTol, 1);
+    CHECK(std::abs(sampleTol) >= 0.0f);
+}

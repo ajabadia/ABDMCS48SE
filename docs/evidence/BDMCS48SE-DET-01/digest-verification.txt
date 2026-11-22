@@ -1,0 +1,28 @@
+# BDMCS48SE-DET-01 - determinismo verificado con dos compiladores (2026-11-22)
+# Host: Windows 11 x64 / Intel Core i7-11370H
+
+## MSVC 14.51.36231 (Release x64, MSVC CRT)
+[Determinismo]
+  ok    DosRendersIgualesDanElMismoDigest
+  ok    ElRenderCoincideConElGolden
+  ok    ElTamanoDeBloqueNoAlteraLaSalida
+  ok    ElTamanoDeBloqueNoAlteraLaSalida48k
+  ok    EstresBuffersVariables44100Y48000CoincidenConGolden
+  ok    LosCanalesRecibenLaMismaMuestra
+
+total: 179 correctos, 0 fallidos (593 ms)
+
+## Clang 19.1.7 (zig 0.14.0, x86_64-windows-gnu, libc++ + mingw-w64 CRT)
+[Determinismo]
+  ok    DosRendersIgualesDanElMismoDigest
+  ok    ElRenderCoincideConElGolden
+  ok    ElTamanoDeBloqueNoAlteraLaSalida
+  ok    ElTamanoDeBloqueNoAlteraLaSalida48k
+  ok    EstresBuffersVariables44100Y48000CoincidenConGolden
+  ok    LosCanalesRecibenLaMismaMuestra
+
+total: 179 correctos, 0 fallidos (503 ms)
+
+## Digests golden versionados (identicos en ambos)
+demo-44100-256-1s 44100 256 44100 3f72f6d9c02acd865a4b05afcc7c21c813610c54325134aa781dffd18dee5d6c
+demo-48000-512-1s 48000 512 48000 30d6d6070fc5fd2e65dd9bfca1dba3152c04df711e31a92fc7c8655b45569350

@@ -58,11 +58,23 @@ void CommandMatrix::setSeed(std::uint32_t seed) {
 }
 
 float CommandMatrix::minFor(MatrixTarget target) {
-    return target == MatrixTarget::EngineClock ? kEngineClockMinScale : kLatchMin;
+    switch (target) {
+    case MatrixTarget::EngineClock: return kEngineClockMinScale;
+    case MatrixTarget::LatchWrite: return kLatchMin;
+    case MatrixTarget::DacQuantize: return kDacQuantizeMin;
+    case MatrixTarget::Freeze: return kFreezeMin;
+    }
+    return 0.0f;
 }
 
 float CommandMatrix::maxFor(MatrixTarget target) {
-    return target == MatrixTarget::EngineClock ? kEngineClockMaxScale : kLatchMax;
+    switch (target) {
+    case MatrixTarget::EngineClock: return kEngineClockMaxScale;
+    case MatrixTarget::LatchWrite: return kLatchMax;
+    case MatrixTarget::DacQuantize: return kDacQuantizeMax;
+    case MatrixTarget::Freeze: return kFreezeMax;
+    }
+    return 1.0f;
 }
 
 float CommandMatrix::clampForTarget(MatrixTarget target, float value) {
@@ -161,8 +173,20 @@ CommandMatrix::Command CommandMatrix::commandFor(const MatrixRow& row) {
     const float normalized = span > 0.0f ? (clamped - minFor(row.target)) / span : 0.0f;
 
     Command command;
-    command.id = row.target == MatrixTarget::EngineClock ? kEngineClockCommandId
-                                                          : kLatchWriteCommandId;
+    switch (row.target) {
+    case MatrixTarget::EngineClock:
+        command.id = kEngineClockCommandId;
+        break;
+    case MatrixTarget::LatchWrite:
+        command.id = kLatchWriteCommandId;
+        break;
+    case MatrixTarget::DacQuantize:
+        command.id = kDacQuantizeCommandId;
+        break;
+    case MatrixTarget::Freeze:
+        command.id = kFreezeCommandId;
+        break;
+    }
     command.value = static_cast<std::int32_t>(std::lround(normalized * kCommandScale));
     return command;
 }

@@ -10,11 +10,14 @@ if not defined BUILD_BAT_PERSISTENT (
 setlocal enabledelayedexpansion
 
 rem ============================================================================
-rem build.bat - ABDMCS48SE (build ALL versions)
+rem build.bat - ABDMCS48SE (build ALL versions: x64 + x86 / 32-bit V-Machine)
 rem ============================================================================
 
 set "CONFIG=Release"
 set "FORCE_WEBUI=0"
+set "DO_X64=0"
+set "DO_X86=0"
+set "EXPLICIT_ARCH=0"
 
 for %%A in (%*) do (
     if /i "%%~A"=="Debug" set "CONFIG=Debug"
@@ -22,6 +25,17 @@ for %%A in (%*) do (
     if /i "%%~A"=="--webui" set "FORCE_WEBUI=1"
     if /i "%%~A"=="-w" set "FORCE_WEBUI=1"
     if /i "%%~A"=="--rebuild-webui" set "FORCE_WEBUI=1"
+    if /i "%%~A"=="x64" ( set "DO_X64=1" & set "EXPLICIT_ARCH=1" )
+    if /i "%%~A"=="64" ( set "DO_X64=1" & set "EXPLICIT_ARCH=1" )
+    if /i "%%~A"=="x86" ( set "DO_X86=1" & set "EXPLICIT_ARCH=1" )
+    if /i "%%~A"=="32" ( set "DO_X86=1" & set "EXPLICIT_ARCH=1" )
+    if /i "%%~A"=="win32" ( set "DO_X86=1" & set "EXPLICIT_ARCH=1" )
+    if /i "%%~A"=="all" ( set "DO_X64=1" & set "DO_X86=1" & set "EXPLICIT_ARCH=1" )
+)
+
+if "%EXPLICIT_ARCH%"=="0" (
+    set "DO_X64=1"
+    set "DO_X86=1"
 )
 
 set "PF86=%ProgramFiles(x86)%"
@@ -69,6 +83,10 @@ call "%VC_VARS%" x64
 if errorlevel 1 goto vs_carga_fallo
 goto vs_cargado
 
+:vs_carga_fallo
+echo [ERROR] Fallo al invocar vcvarsall.bat.
+goto error
+
 :vs_cargado
 where cl >nul 2>&1
 if errorlevel 1 goto cl_ausente
@@ -97,7 +115,8 @@ echo         y tambien en D:\desarrollos\cmake\bin y en el PATH.
 goto error
 :cmake_ok
 
-set "BUILD_DIR=build"
+set "BUILD_DIR_64=build"
+set "BUILD_DIR_32=build32"
 
 rem --- Build WebUI if needed (required for JUCE plugin embed) ------------
 set "NEED_WEBUI=0"
@@ -134,63 +153,142 @@ if "!NEED_WEBUI!"=="1" (
     echo [INFO] WebUI/dist/index.html is up to date. Using existing bundle.
 )
 
-echo ========================================
-echo  ABDMCS48SE - build ALL versions
-echo  Configuracion: %CONFIG%
-echo  Directorio:    %BUILD_DIR%
-echo  Visual Studio: %VS_ROOT%
-echo  cmake:         %CMAKE_PATH%
-echo  Plugin:        ON (VST3 + Standalone)
-echo  CLI/Tests/Bench: ON
-echo ========================================
+rem Cerrar instancias previas para liberar locks de enlace
+taskkill /f /im "BDMCS48SE Instrument.exe" >nul 2>&1
+taskkill /f /im "bdmcs48se.exe" >nul 2>&1
 
-rem --- Configurar -----------------------------------------------------------
-"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
-if not errorlevel 1 goto cmake_configurado
-echo [WARNING] CMake configuration failed. Clearing CMakeCache.txt and retrying...
-if exist "%BUILD_DIR%\CMakeCache.txt" del /q "%BUILD_DIR%\CMakeCache.txt"
-if exist "%BUILD_DIR%\CMakeFiles" rmdir /s /q "%BUILD_DIR%\CMakeFiles"
-"%CMAKE_PATH%" -S . -B "%BUILD_DIR%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
-if not errorlevel 1 goto cmake_configurado
-echo [ERROR] CMake configuration failed again with code %ERRORLEVEL%
-goto error
-:cmake_configurado
+rem ============================================================================
+rem BLOQUE X64 (Arquitectura 64 bits para DAWs modernos)
+rem ============================================================================
+if "%DO_X64%"=="1" (
+    echo.
+    echo ============================================================================
+    echo  [BUILD X64] Targets x64 (Standalone, VST3, VST2, CLI, Tests)
+    echo  Configuracion: %CONFIG%
+    echo  Directorio:    %BUILD_DIR_64%
+    echo ============================================================================
 
-rem --- Compilar TODO --------------------------------------------------------
-echo [INFO] Building ALL targets (core, firmware, host, CLI, tests, benchmarks, plugin VST3+Standalone)...
-"%CMAKE_PATH%" --build "%BUILD_DIR%" --config %CONFIG% --parallel
-if not errorlevel 1 goto compilado
-echo [ERROR] Build failed with code %ERRORLEVEL%
-goto error
-:compilado
+    "%CMAKE_PATH%" -S . -B "%BUILD_DIR_64%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
+    if errorlevel 1 (
+        echo [WARNING] Fallo de configuracion CMake x64. Limpiando cache y reintentando...
+        if exist "%BUILD_DIR_64%\CMakeCache.txt" del /q "%BUILD_DIR_64%\CMakeCache.txt"
+        if exist "%BUILD_DIR_64%\CMakeFiles" rmdir /s /q "%BUILD_DIR_64%\CMakeFiles"
+        "%CMAKE_PATH%" -S . -B "%BUILD_DIR_64%" -G "Visual Studio 18 2026" -A x64 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
+        if errorlevel 1 goto error
+    )
 
-rem --- Tests ----------------------------------------------------------------
-echo [INFO] Running tests (core + plugin_smoke if available)...
-"%CMAKE_PATH%" --build "%BUILD_DIR%" --config %CONFIG% --target run_tests
-if errorlevel 1 goto tests_fallo
-goto tests_ok
+    echo [INFO] Compilando targets x64...
+    "%CMAKE_PATH%" --build "%BUILD_DIR_64%" --config %CONFIG% --parallel
+    if errorlevel 1 goto error
 
-:tests_fallo
+    echo [INFO] Ejecutando tests x64...
+    "%CMAKE_PATH%" --build "%BUILD_DIR_64%" --config %CONFIG% --target run_tests
+    if errorlevel 1 goto error
+
+    rem Staging de artefactos x64 en dist\x64
+    if not exist "%~dp0dist\x64\Standalone" mkdir "%~dp0dist\x64\Standalone"
+    if not exist "%~dp0dist\x64\VST3" mkdir "%~dp0dist\x64\VST3"
+    if not exist "%~dp0dist\x64\VST" mkdir "%~dp0dist\x64\VST"
+    if not exist "%~dp0dist\x64\CLI" mkdir "%~dp0dist\x64\CLI"
+
+    if exist "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe" (
+        copy /y "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe" "%~dp0dist\x64\Standalone\" >nul
+    )
+    if exist "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3" (
+        xcopy /e /i /y "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3" "%~dp0dist\x64\VST3\BDMCS48SE Instrument.vst3" >nul
+    )
+    if exist "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\VST\BDMCS48SE Instrument.dll" (
+        copy /y "%BUILD_DIR_64%\bdmcs48se_instrument_artefacts\%CONFIG%\VST\BDMCS48SE Instrument.dll" "%~dp0dist\x64\VST\" >nul
+    )
+    if exist "%BUILD_DIR_64%\Release\bdmcs48se.exe" (
+        copy /y "%BUILD_DIR_64%\Release\bdmcs48se.exe" "%~dp0dist\x64\CLI\" >nul
+    ) else if exist "%BUILD_DIR_64%\%CONFIG%\bdmcs48se.exe" (
+        copy /y "%BUILD_DIR_64%\%CONFIG%\bdmcs48se.exe" "%~dp0dist\x64\CLI\" >nul
+    )
+)
+
+rem ============================================================================
+rem BLOQUE X86 / 32 BITS (Salida propia para V-Machine y DAWs x86)
+rem ============================================================================
+if "%DO_X86%"=="1" (
+    echo.
+    echo ============================================================================
+    echo  [BUILD X86 / 32-BIT] Targets Win32 (V-Machine / IA32 + VST2 + Standalone)
+    echo  Configuracion: %CONFIG%
+    echo  Directorio:    %BUILD_DIR_32%
+    echo ============================================================================
+
+    "%CMAKE_PATH%" -S . -B "%BUILD_DIR_32%" -G "Visual Studio 18 2026" -A Win32 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
+    if errorlevel 1 (
+        echo [WARNING] Fallo de configuracion CMake x86. Limpiando cache y reintentando...
+        if exist "%BUILD_DIR_32%\CMakeCache.txt" del /q "%BUILD_DIR_32%\CMakeCache.txt"
+        if exist "%BUILD_DIR_32%\CMakeFiles" rmdir /s /q "%BUILD_DIR_32%\CMakeFiles"
+        "%CMAKE_PATH%" -S . -B "%BUILD_DIR_32%" -G "Visual Studio 18 2026" -A Win32 -DCMAKE_SYSTEM_VERSION=10.0.26100.0 -DABDMCS48SE_BUILD_PLUGIN=ON -DABDMCS48SE_BUILD_CLI=ON -DABDMCS48SE_BUILD_TESTS=ON -DABDMCS48SE_BUILD_BENCHMARKS=ON
+        if errorlevel 1 goto error
+    )
+
+    echo [INFO] Compilando targets x86 (32 bits con /arch:IA32)...
+    "%CMAKE_PATH%" --build "%BUILD_DIR_32%" --config %CONFIG% --parallel
+    if errorlevel 1 goto error
+
+    echo [INFO] Ejecutando tests x86 (32 bits)...
+    "%CMAKE_PATH%" --build "%BUILD_DIR_32%" --config %CONFIG% --target run_tests
+    if errorlevel 1 goto error
+
+    rem Staging de artefactos x86 en dist\x86
+    if not exist "%~dp0dist\x86\Standalone" mkdir "%~dp0dist\x86\Standalone"
+    if not exist "%~dp0dist\x86\VST3" mkdir "%~dp0dist\x86\VST3"
+    if not exist "%~dp0dist\x86\VST" mkdir "%~dp0dist\x86\VST"
+    if not exist "%~dp0dist\x86\CLI" mkdir "%~dp0dist\x86\CLI"
+
+    if exist "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe" (
+        copy /y "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe" "%~dp0dist\x86\Standalone\" >nul
+    )
+    if exist "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3" (
+        xcopy /e /i /y "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3" "%~dp0dist\x86\VST3\BDMCS48SE Instrument.vst3" >nul
+    )
+    if exist "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\VST\BDMCS48SE Instrument.dll" (
+        copy /y "%BUILD_DIR_32%\bdmcs48se_instrument_artefacts\%CONFIG%\VST\BDMCS48SE Instrument.dll" "%~dp0dist\x86\VST\" >nul
+    )
+    if exist "%BUILD_DIR_32%\Release\bdmcs48se.exe" (
+        copy /y "%BUILD_DIR_32%\Release\bdmcs48se.exe" "%~dp0dist\x86\CLI\" >nul
+    ) else if exist "%BUILD_DIR_32%\%CONFIG%\bdmcs48se.exe" (
+        copy /y "%BUILD_DIR_32%\%CONFIG%\bdmcs48se.exe" "%~dp0dist\x86\CLI\" >nul
+    )
+)
+
 echo.
-echo [ERROR] The test suite failed.
-echo [INFO] View full test output with:
-echo        ctest --test-dir build --rerun-failed --output-on-failure
-goto error
-
-:tests_ok
-echo ========================================
-echo  [SUCCESS] All versions built and tests passed.
-echo  CLI:        %BUILD_DIR%\bdmcs48se\%CONFIG%\bdmcs48se.exe
-echo  Standalone: %BUILD_DIR%\bdmcs48se_instrument_artefacts\%CONFIG%\Standalone\BDMCS48SE Instrument.exe
-echo  VST3:       %BUILD_DIR%\bdmcs48se_instrument_artefacts\%CONFIG%\VST3\BDMCS48SE Instrument.vst3
-echo ========================================
+echo ============================================================================
+echo  [SUCCESS] Compilacion completada y pruebas superadas.
+echo ============================================================================
+if "%DO_X64%"=="1" (
+    echo  [Artefactos 64-bit - DAWs modernos]:
+    echo    Carpeta de distribucion: %~dp0dist\x64\
+    echo    VST2 [.dll 64-bit]:      %~dp0dist\x64\VST\BDMCS48SE Instrument.dll
+    echo    VST3 [.vst3 64-bit]:     %~dp0dist\x64\VST3\BDMCS48SE Instrument.vst3
+    echo    Standalone [.exe]:       %~dp0dist\x64\Standalone\BDMCS48SE Instrument.exe
+    echo    CLI [.exe]:              %~dp0dist\x64\CLI\bdmcs48se.exe
+    echo.
+)
+if "%DO_X86%"=="1" (
+    echo  [Artefactos 32-bit - SM Pro Audio V-Machine / DAWs x86]:
+    echo    Carpeta de distribucion: %~dp0dist\x86\
+    echo    VST2 [.dll 32-bit IA32]: %~dp0dist\x86\VST\BDMCS48SE Instrument.dll
+    echo    VST3 [.vst3 32-bit]:     %~dp0dist\x86\VST3\BDMCS48SE Instrument.vst3
+    echo    Standalone [.exe]:       %~dp0dist\x86\Standalone\BDMCS48SE Instrument.exe
+    echo    CLI [.exe]:              %~dp0dist\x86\CLI\bdmcs48se.exe
+    echo.
+)
+echo ============================================================================
 echo.
 pause
 exit /b 0
 
 :error
 echo.
-echo [ERROR] Build failed.
+echo ============================================================================
+echo  [ERROR] La compilacion o ejecucion de tests ha fallado.
+echo ============================================================================
 echo.
 pause
 exit /b 1

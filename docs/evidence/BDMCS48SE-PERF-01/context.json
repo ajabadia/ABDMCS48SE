@@ -1,0 +1,41 @@
+{
+  "id": "BDMCS48SE-PERF-01",
+  "date": "2026-11-22",
+  "purpose": "Matriz de rendimiento headless del core/maquina MCS-48 para las Fases 3 y 5",
+  "host": {
+    "os": "Microsoft Windows 11 Pro Insider Preview 10.0.26340",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11370H @ 3.30GHz",
+    "physical_cores": 4
+  },
+  "build": {
+    "config": "Release",
+    "arch": "x64",
+    "generator": "Visual Studio 18 2026",
+    "compiler": "MSVC 14.51.36231"
+  },
+  "benchmark": {
+    "binary": "build/Release/bdmcs48_bench.exe",
+    "commands": [
+      "bdmcs48_bench --seconds 2 --repeats 5",
+      "bdmcs48_bench --csv --seconds 2 --repeats 5"
+    ],
+    "sample_rates_hz": [44100, 48000],
+    "block_sizes": [64, 128, 256, 512, 1024],
+    "instances": [1, 2, 4],
+    "audio_seconds_per_measurement": 2,
+    "repeats": 5,
+    "statistic": "minimo de las repeticiones",
+    "threading": "los hosts de las N instancias se renderizan secuencialmente en un unico hilo"
+  },
+  "files": [
+    "performance-matrix.txt",
+    "performance-matrix.csv",
+    "performance-matrix-run2.csv"
+  ],
+  "notes": [
+    "Sin JUCE y sin DAW: solo core, maquina y host headless.",
+    "El paquete de firmware es el demo propio construido en memoria; no se lee del disco.",
+    "La segunda ejecucion se hizo para cuantificar la dispersion: -46% a +18% por celda.",
+    "No hay umbral de rendimiento acordado; las cifras son indicativas."
+  ]
+}

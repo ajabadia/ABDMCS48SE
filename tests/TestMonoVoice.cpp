@@ -82,6 +82,7 @@ TEST(MonoVoice, LaLiberacionLlegaAlSilencio) {
     CHECK_NEAR(voice.nextGain(), 1.0, 1e-6);
 
     voice.noteOff(69);
+    CHECK_EQ(voice.currentNote(), 69);
     float gain = 1.0f;
     int samples = 0;
     while (voice.sounding() && samples < 48'000) {
@@ -134,4 +135,93 @@ TEST(MonoVoice, RepetirLaNotaLaDejaComoUltima) {
 
     voice.noteOff(60);
     CHECK_EQ(voice.currentNote(), 62);
+}
+
+TEST(MonoVoice, GlidePortamentoLegato) {
+    VoiceConfig config;
+    config.attackMs = 0.0;
+    config.releaseMs = 100.0;
+    config.glideMs = 50.0; // 50 ms
+    MonoVoice voice;
+    voice.prepare(kSampleRate, config);
+
+    // Staccato attack: no glide inicial
+    voice.noteOn(60, 1.0f);
+    CHECK(!voice.isGliding());
+    CHECK_NEAR(voice.currentPitch(), 60.0, 1e-4);
+    voice.nextGain(); // avanza a Stage::Hold
+
+    // Legato: 60 sigue sostenida y se pulsa 72 -> dispara glide
+    voice.noteOn(72, 1.0f);
+    CHECK(voice.isGliding());
+    CHECK_EQ(voice.currentNote(), 72);
+
+    // Muestra intermedia (tras 100 muestras ~2ms): el pitch ha subido pero aún no llega a 72
+    for (int i = 0; i < 100; ++i) {
+        voice.nextGain();
+    }
+    CHECK(voice.currentPitch() > 60.0);
+    CHECK(voice.currentPitch() < 72.0);
+
+    // Tras tiempo suficiente (~100 ms > 50 ms), el glide concluye en 72
+    for (int i = 0; i < 4800; ++i) {
+        voice.nextGain();
+    }
+    CHECK(!voice.isGliding());
+    CHECK_NEAR(voice.currentPitch(), 72.0, 1e-3);
+}
+
+TEST(MonoVoice, GlideStaccatoNoDisparaPortamento) {
+    VoiceConfig config;
+    config.attackMs = 0.0;
+    config.releaseMs = 5.0;
+    config.glideMs = 50.0;
+    MonoVoice voice;
+    voice.prepare(kSampleRate, config);
+
+    voice.noteOn(60, 1.0f);
+    voice.nextGain();
+    voice.noteOff(60);
+    // Dejar que termine la liberación (silencio absoluto)
+    for (int i = 0; i < 500; ++i) {
+        voice.nextGain();
+    }
+    CHECK(!voice.sounding());
+
+    // Nueva nota staccato desde el silencio: entra directa sin glide
+    voice.noteOn(72, 1.0f);
+    CHECK(!voice.isGliding());
+    CHECK_NEAR(voice.currentPitch(), 72.0, 1e-4);
+}
+
+TEST(MonoVoice, CurvasDeVelocidad) {
+    MonoVoice voice;
+    voice.prepare(kSampleRate);
+    voice.setVelocitySens(1.0f); // 100% sensible a velocidad
+
+    // Linear
+    voice.setVelocityCurve(bdmcs48::instrument::VelocityCurve::Linear);
+    voice.noteOn(60, 0.5f);
+    CHECK_NEAR(voice.velocity(), 0.5f, 1e-4);
+
+    // Exponential (v^2 -> 0.5^2 = 0.25)
+    voice.setVelocityCurve(bdmcs48::instrument::VelocityCurve::Exponential);
+    voice.noteOn(60, 0.5f);
+    CHECK_NEAR(voice.velocity(), 0.25f, 1e-4);
+
+    // Logarithmic (sqrt(v) -> sqrt(0.25) = 0.5)
+    voice.setVelocityCurve(bdmcs48::instrument::VelocityCurve::Logarithmic);
+    voice.noteOn(60, 0.25f);
+    CHECK_NEAR(voice.velocity(), 0.5f, 1e-4);
+
+    // Stepped (4 niveles: 0.25, 0.5, 0.75, 1.0)
+    voice.setVelocityCurve(bdmcs48::instrument::VelocityCurve::Stepped);
+    voice.noteOn(60, 0.1f);
+    CHECK_NEAR(voice.velocity(), 0.25f, 1e-4);
+    voice.noteOn(60, 0.35f);
+    CHECK_NEAR(voice.velocity(), 0.5f, 1e-4);
+    voice.noteOn(60, 0.65f);
+    CHECK_NEAR(voice.velocity(), 0.75f, 1e-4);
+    voice.noteOn(60, 0.95f);
+    CHECK_NEAR(voice.velocity(), 1.0f, 1e-4);
 }

@@ -1,5 +1,7 @@
 #include "host/MachineHost.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -100,6 +102,15 @@ void MachineHost::renderBlock(std::uint32_t frames, float* const* outputs, std::
         applyPendingCommands();
         active_->runBlock(frames, outputs, channels);
         framesRendered_.fetch_add(frames, std::memory_order_relaxed);
+    } else if (outputs != nullptr) {
+        // Sin maquina la salida es silencio explicito: el buffer que entrega
+        // el host puede traer restos y el callback no debe dejarlo sin
+        // escribir (docs/AUDIO_THREAD_POLICY.md).
+        for (std::uint32_t channel = 0; channel < channels; ++channel) {
+            if (outputs[channel] != nullptr) {
+                std::fill_n(outputs[channel], frames, 0.0f);
+            }
+        }
     }
 
     core::MachineSnapshot snapshot;
@@ -112,9 +123,31 @@ void MachineHost::renderBlock(std::uint32_t frames, float* const* outputs, std::
         snapshot.psw = status.psw;
         snapshot.bank = status.bank;
         snapshot.faulted = status.faulted;
-        snapshot.message = status.faultMessage;
+        std::strncpy(snapshot.message, status.faultMessage, sizeof(snapshot.message) - 1);
+        snapshot.message[sizeof(snapshot.message) - 1] = '\0';
         if (outputs != nullptr && channels > 0 && outputs[0] != nullptr && frames > 0) {
             snapshot.outputLevel = outputs[0][frames - 1];
+            float peak = 0.0f;
+            float sumSq = 0.0f;
+            const float* channel0 = outputs[0];
+            for (std::uint32_t i = 0; i < frames; ++i) {
+                const float s = channel0[i];
+                const float absS = std::abs(s);
+                if (absS > peak) {
+                    peak = absS;
+                }
+                sumSq += s * s;
+            }
+            snapshot.peakLevel = peak;
+            snapshot.rmsLevel = std::sqrt(sumSq / static_cast<float>(frames));
+
+            // Diezmado uniforme a 8 muestras de forma de onda reducida
+            for (std::size_t w = 0; w < 8; ++w) {
+                const std::size_t idx = (w * frames) / 8;
+                const float s = channel0[idx];
+                const float clamped = s < -1.0f ? -1.0f : (s > 1.0f ? 1.0f : s);
+                snapshot.waveform[w] = static_cast<std::int8_t>(clamped * 127.0f);
+            }
         }
     }
     snapshots_.publish(snapshot);
@@ -135,7 +168,12 @@ core::EngineStatus MachineHost::status() {
     status.psw = snapshot.psw;
     status.bank = snapshot.bank;
     status.faulted = snapshot.faulted;
-    status.faultMessage = snapshot.message;
+    status.outputLevel = snapshot.outputLevel;
+    status.peakLevel = snapshot.peakLevel;
+    status.rmsLevel = snapshot.rmsLevel;
+    std::memcpy(status.waveform, snapshot.waveform, sizeof(status.waveform));
+    std::strncpy(status.faultMessage, snapshot.message, sizeof(status.faultMessage) - 1);
+    status.faultMessage[sizeof(status.faultMessage) - 1] = '\0';
     return status;
 }
 
@@ -180,7 +218,12 @@ core::EngineStatus MachineHost::status() const {
     status.psw = snapshot.psw;
     status.bank = snapshot.bank;
     status.faulted = snapshot.faulted;
-    status.faultMessage = snapshot.message;
+    status.outputLevel = snapshot.outputLevel;
+    status.peakLevel = snapshot.peakLevel;
+    status.rmsLevel = snapshot.rmsLevel;
+    std::memcpy(status.waveform, snapshot.waveform, sizeof(status.waveform));
+    std::strncpy(status.faultMessage, snapshot.message, sizeof(status.faultMessage) - 1);
+    status.faultMessage[sizeof(status.faultMessage) - 1] = '\0';
     return status;
 }
 

@@ -3,6 +3,7 @@
 
 # Build directories and generated artifacts
 /build/
+/build32/
 /build-*/
 /cmake-build-*/
 /out/
@@ -82,3 +83,12 @@ __pycache__/
 *.zip
 *.7z
 *.rar
+
+# Local user workspace (ROMs and converted user packages)
+workspace/
+
+# MAME reference sources and local testing ROMs (kept locally for private test only, never pushed to Git)
+docs/mame/
+build_test/
+node_modules/
+

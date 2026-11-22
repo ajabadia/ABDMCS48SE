@@ -6,7 +6,9 @@
   "description": "Editor WebView de BDMCS48SE: fuente de WebUI/dist, que CMake embebe en el binario.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "vitest run --config vite.config.js tests/",
+    "test:i18n": "vitest run --config vite.config.js tests/i18n.test.js"
   },
   "devDependencies": {
     "vite": "^8.3.2"

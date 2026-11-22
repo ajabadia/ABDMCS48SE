@@ -1,0 +1,32 @@
+{
+  "id": "BDMCS48SE-DET-01",
+  "fecha": "2026-11-22",
+  "objetivo": "Comprobar que los digests golden de determinismo no dependen del compilador ni del runtime de C, antes de darlos por buenos.",
+  "host": {
+    "os": "Windows 11 x64",
+    "cpu": "Intel Core i7-11370H"
+  },
+  "compiladores": [
+    {
+      "compilador": "MSVC 14.51.36231 (Visual Studio 18 BuildTools)",
+      "runtime": "MSVC CRT, Release x64",
+      "build": "cmake --build build --target bdmcs48_tests --config Release",
+      "suite": "build/Release/bdmcs48_tests.exe",
+      "resultado": "179/179, 6/6 de determinismo en verde"
+    },
+    {
+      "compilador": "Clang 19.1.7 (zig 0.14.0, target x86_64-windows-gnu)",
+      "runtime": "libc++ + mingw-w64 CRT (distinto del MSVC CRT)",
+      "build": "zig c++ -std=c++20 -O2 -I source -I tests -DBDMCS48SE_SOURCE_DIR=... <tests/*.cpp salvo PluginSmokeTest> <source/**/*.cpp salvo plugin/, webui/, cli/> -lws2_32",
+      "suite": "/tmp/bdmcs48-clang/tests-clang.exe",
+      "resultado": "179/179, 6/6 de determinismo en verde",
+      "nota": "Compilado fuera de CMake (el target de test incluye PluginSmokeTest, que necesita JUCE y se excluye) con el mismo codigo fuente que MSVC; se enlaza ws2_32 por HttpClient/HttpServer."
+    }
+  ],
+  "goldens_comparados": {
+    "demo-44100-256-1s": "3f72f6d9c02acd865a4b05afcc7c21c813610c54325134aa781dffd18dee5d6c",
+    "demo-48000-512-1s": "30d6d6070fc5fd2e65dd9bfca1dba3152c04df711e31a92fc7c8655b45569350"
+  },
+  "conclusion": "Ambos compiladores, con CRTs distintos, producen exactamente los digests versionados: el golden se mantiene byte-exacto y no hace falta tolerancia.",
+  "limite": "No se ha ejecutado en Linux (glibc) ni macOS. Lo cubrirá el CI de cuatro plataformas cuando el test este versionado; si alguna plataforma divergiera, el fallo muestra el digest real y habria que decidir tolerancia entonces."
+}

@@ -282,3 +282,86 @@ TEST(CommandMatrix, ResetOlvidaLoProgramado) {
     CHECK_EQ(matrix.rows()[0].enabled, true); // fila 0 activa por defecto
     CHECK_EQ(matrix.rows()[1].enabled, false);
 }
+
+TEST(CommandMatrix, DisparoYMutacionDacQuantize) {
+    CommandMatrix matrix(kSampleRate);
+    MatrixRow row;
+    row.enabled = true;
+    row.note = 64;
+    row.target = MatrixTarget::DacQuantize;
+    row.value = 8.0f;
+    row.currentValue = 8.0f;
+    row.mutation = MatrixMutation::Decrement;
+    row.mutationAmount = 1.0f;
+    matrix.publishRows(singleRow(row));
+    CHECK(matrix.consumePublishedRows());
+
+    matrix.noteOn(64);
+    CHECK_EQ(matrix.pendingCount(), 1u);
+
+    CommandMatrix::Command command;
+    CHECK(matrix.popDue(command));
+    CHECK_EQ(command.id, CommandMatrix::kDacQuantizeCommandId);
+    // 8 bits -> valor normalizado maximo (32767)
+    CHECK_EQ(command.value, 32'767);
+
+    // Tras la primera ejecucion, muto a 7 bits
+    CHECK_NEAR(matrix.rows()[0].currentValue, 7.0f, 1e-4);
+
+    // Segundo disparo: debe emitir el comando de 7 bits y mutar a 6
+    matrix.noteOn(64);
+    CHECK(matrix.popDue(command));
+    CHECK_EQ(command.id, CommandMatrix::kDacQuantizeCommandId);
+    CHECK_NEAR(matrix.rows()[0].currentValue, 6.0f, 1e-4);
+}
+
+TEST(CommandMatrix, DisparoFreeze) {
+    CommandMatrix matrix(kSampleRate);
+    MatrixRow row;
+    row.enabled = true;
+    row.note = 67;
+    row.target = MatrixTarget::Freeze;
+    row.value = 1.0f;
+    row.currentValue = 1.0f;
+    matrix.publishRows(singleRow(row));
+    CHECK(matrix.consumePublishedRows());
+
+    matrix.noteOn(67);
+    CHECK_EQ(matrix.pendingCount(), 1u);
+
+    CommandMatrix::Command command;
+    CHECK(matrix.popDue(command));
+    CHECK_EQ(command.id, CommandMatrix::kFreezeCommandId);
+    CHECK_EQ(command.value, 32'767);
+}
+
+TEST(CommandMatrix, ReversibilidadResetRestauraValoresNeutros) {
+    CommandMatrix matrix(kSampleRate);
+    std::array<MatrixRow, CommandMatrix::kRows> rows = CommandMatrix::defaults();
+
+    // Deformaciones agresivas de Circuit Bending
+    rows[0].target = MatrixTarget::EngineClock;
+    rows[0].currentValue = 4.0f;
+    rows[1].enabled = true;
+    rows[1].target = MatrixTarget::DacQuantize;
+    rows[1].currentValue = 2.0f;
+    rows[2].enabled = true;
+    rows[2].target = MatrixTarget::Freeze;
+    rows[2].currentValue = 1.0f;
+
+    matrix.publishRows(rows);
+    matrix.consumePublishedRows();
+    matrix.noteOn(60);
+    matrix.noteOn(61);
+
+    CHECK(matrix.pendingCount() > 0);
+    CHECK(matrix.rows()[0].currentValue != 1.0f);
+
+    // Reset reversibilidad
+    matrix.reset();
+    CHECK_EQ(matrix.pendingCount(), 0u);
+    CHECK_EQ(matrix.rows()[0].target, MatrixTarget::EngineClock);
+    CHECK_EQ(matrix.rows()[0].currentValue, 1.0f);
+    CHECK_EQ(matrix.rows()[1].enabled, false);
+    CHECK_EQ(matrix.rows()[2].enabled, false);
+}

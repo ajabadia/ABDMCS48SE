@@ -1,0 +1,21 @@
+# bdmcs48se - goldens de determinismo de render (Fase 3)
+#
+# Receta exacta del render:
+#   * firmware de demostracion propio: bdmcs48::firmware::demo::demoPackage()
+#     (manifest mcs48.demo.tone; sin ROM de terceros)
+#   * MachineHost con Config{sampleRateHz, blockSize}; sin comandos, sin
+#     parametros y sin entradas: solo firmware + configuracion
+#   * renderBlock hasta `frames` muestras, mono
+#   * SHA-256 sobre la forma canonica: cada muestra como float32 IEEE-754
+#     binary32 en 4 bytes little-endian
+#
+# Regenerar SOLO si el cambio de comportamiento es intencionado: el test
+# falla mostrando el digest real, que se copia aqui.
+#
+# Verificado con MSVC 14.51 (CRT de MSVC) y Clang 19.1.7 (zig 0.14.0,
+# x86_64-windows-gnu, libc++ + mingw-w64): mismos digests byte a byte.
+# Evidencia: docs/evidence/BDMCS48SE-DET-01/.
+#
+# formato: nombre sampleRateHz blockSize frames sha256
+demo-44100-256-1s 44100 256 44100 3f72f6d9c02acd865a4b05afcc7c21c813610c54325134aa781dffd18dee5d6c
+demo-48000-512-1s 48000 512 48000 30d6d6070fc5fd2e65dd9bfca1dba3152c04df711e31a92fc7c8655b45569350

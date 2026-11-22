@@ -2,6 +2,9 @@
 //
 // Subcomandos:
 //   demo <dir>                     escribe el paquete de demostracion
+//   enhanced <dir>                 escribe el paquete de voz mejorada con mayor paleta sonora
+//   mono <dir>                     escribe el paquete de voz monofonica simple
+//   mario <dir>                    escribe el paquete de efectos sonoros estilo Mario Bros
 //   inspect <paquete>              muestra el manifiesto en texto
 //   diagnose <paquete> [opciones]  renderiza y vuelca el diagnostico JSON
 //   render <paquete> [opciones]    renderiza audio a un fichero WAV
@@ -27,6 +30,10 @@
 #include "firmware/FirmwarePackage.h"
 #include "firmware/PackageLoader.h"
 #include "firmware/demo/DemoFirmware.h"
+#include "firmware/demo/MonoVoiceFirmware.h"
+#include "firmware/demo/EnhancedMonoVoiceFirmware.h"
+#include "firmware/demo/WavetablePercussionFirmware.h"
+#include "firmware/demo/MarioBrosFirmware.h"
 #include "host/DiagnosticsProtocol.h"
 #include "host/HttpServer.h"
 #include "host/MachineHost.h"
@@ -37,26 +44,27 @@ constexpr std::uint32_t kDefaultSampleRate = 44'100;
 constexpr std::uint32_t kDefaultBlockSize = 64;
 
 void printUsage() {
-    std::cout <<
-        "ABDMCS48SE - host MCS-48 headless\n"
-        "\n"
-        "Uso:\n"
-        "  bdmcs48se demo <directorio>\n"
-        "  bdmcs48se inspect <paquete>\n"
-        "  bdmcs48se diagnose <paquete> [--frames N] [--sample-rate HZ]\n"
-        "  bdmcs48se render <paquete> --salida <fichero.wav> [--segundos N]\n"
-        "  bdmcs48se serve <paquete> [--puerto N] [--webview <dir>] [--segundos N]\n"
-        "  bdmcs48se help\n"
-        "\n"
-        "El paquete es un directorio con 'firmware.json' y las imagenes que este\n"
-        "declara. Para empezar:  bdmcs48se demo build/demo\n";
+    std::cout << "ABDMCS48SE - host MCS-48 headless\n\n"
+              << "Uso:\n"
+              << "  bdmcs48se demo <directorio>        (paquete de demostracion con matriz)\n"
+              << "  bdmcs48se wavetable <directorio>   (percusion lo-fi + oscilador wavetable multimodo)\n"
+              << "  bdmcs48se enhanced <directorio>    (voz mejorada con control por latch - mayor paleta sonora)\n"
+              << "  bdmcs48se mono <directorio>        (voz monofonica cuadrada simple)\n"
+              << "  bdmcs48se mario <directorio>       (efectos sonoros estilo Mario Bros)\n"
+              << "  bdmcs48se inspect <paquete>\n"
+              << "  bdmcs48se diagnose <paquete> [--frames N] [--sample-rate HZ]\n"
+              << "  bdmcs48se render <paquete> --salida <fichero.wav> [--segundos N]\n"
+              << "  bdmcs48se serve <paquete> [--puerto N] [--webview <dir>] [--segundos N]\n"
+              << "  bdmcs48se help\n\n"
+              << "El paquete es un directorio con 'firmware.json' y las imagenes que este\n"
+              << "declara. Para empezar:  bdmcs48se demo build/demo\n";
 }
 
 struct Options {
     std::string package;
     std::string output;
     std::string webview;
-    std::uint32_t frames = 4'410;   // ~0,1 s a 44,1 kHz
+    std::uint32_t frames = 4'410;
     std::uint32_t seconds = 2;
     std::uint32_t sampleRate = kDefaultSampleRate;
     std::uint16_t port = 8'080;
@@ -150,6 +158,86 @@ int commandDemo(const std::vector<std::string>& args) {
     }
     std::cout << "[OK] paquete de demostracion escrito en " << options.package << "\n";
     std::cout << bdmcs48::firmware::demo::demoDescription();
+    return 0;
+}
+
+int commandEnhanced(const std::vector<std::string>& args) {
+    Options options;
+    std::string error;
+    if (!parseOptions(args, options, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 2;
+    }
+    if (options.package.empty()) {
+        std::cerr << "[ERROR] falta el directorio de destino\n";
+        return 2;
+    }
+    if (!bdmcs48::firmware::demo::writeEnhancedMonoVoicePackage(options.package, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 1;
+    }
+    std::cout << "[OK] paquete de voz mejorada escrito en " << options.package << "\n";
+    std::cout << bdmcs48::firmware::demo::enhancedMonoVoiceDescription();
+    return 0;
+}
+
+int commandWavetable(const std::vector<std::string>& args) {
+    Options options;
+    std::string error;
+    if (!parseOptions(args, options, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 2;
+    }
+    if (options.package.empty()) {
+        std::cerr << "[ERROR] falta el directorio de destino\n";
+        return 2;
+    }
+    if (!bdmcs48::firmware::demo::writeWavetablePercussionPackage(options.package, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 1;
+    }
+    std::cout << "[OK] paquete de percusion y wavetable escrito en " << options.package << "\n";
+    std::cout << bdmcs48::firmware::demo::wavetablePercussionDescription();
+    return 0;
+}
+
+int commandMono(const std::vector<std::string>& args) {
+    Options options;
+    std::string error;
+    if (!parseOptions(args, options, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 2;
+    }
+    if (options.package.empty()) {
+        std::cerr << "[ERROR] falta el directorio de destino\n";
+        return 2;
+    }
+    if (!bdmcs48::firmware::demo::writeMonoVoicePackage(options.package, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 1;
+    }
+    std::cout << "[OK] paquete de voz monofonica escrito en " << options.package << "\n";
+    std::cout << bdmcs48::firmware::demo::monoVoiceDescription();
+    return 0;
+}
+
+int commandMario(const std::vector<std::string>& args) {
+    Options options;
+    std::string error;
+    if (!parseOptions(args, options, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 2;
+    }
+    if (options.package.empty()) {
+        std::cerr << "[ERROR] falta el directorio de destino\n";
+        return 2;
+    }
+    if (!bdmcs48::firmware::demo::writeMarioBrosPackage(options.package, error)) {
+        std::cerr << "[ERROR] " << error << "\n";
+        return 1;
+    }
+    std::cout << "[OK] paquete de efectos Mario Bros escrito en " << options.package << "\n";
+    std::cout << bdmcs48::firmware::demo::marioBrosDescription();
     return 0;
 }
 
@@ -257,19 +345,19 @@ bool writeWav(const std::string& path, const std::vector<float>& samples, std::u
     putU32(riffSize);
     stream.write("WAVE", 4);
     stream.write("fmt ", 4);
-    putU32(16);           // tamano del bloque fmt
-    putU16(1);            // PCM
-    putU16(1);            // mono
+    putU32(16);
+    putU16(1);
+    putU16(1);
     putU32(sampleRate);
-    putU32(sampleRate * 2); // bytes por segundo
-    putU16(2);            // alineacion
-    putU16(16);           // bits por muestra
+    putU32(sampleRate * 2);
+    putU16(2);
+    putU16(16);
     stream.write("data", 4);
     putU32(dataBytes);
 
     for (const float sample : samples) {
         float clamped = std::clamp(sample, -1.0f, 1.0f);
-        const auto value = static_cast<std::int16_t>(std::lround(clamped * 32'767.0f));
+        const auto value = static_cast<std::int16_t>(std::lround(clamped * 32767.0f));
         putU16(static_cast<std::uint16_t>(value));
     }
     stream.flush();
@@ -344,7 +432,6 @@ int commandServe(const std::vector<std::string>& args) {
 
     std::string webviewRoot = options.webview;
     if (webviewRoot.empty()) {
-        // Junto al ejecutable: el CMake copia el cliente a <exe>/webview.
         webviewRoot = "webview";
     }
 
@@ -379,10 +466,8 @@ int commandServe(const std::vector<std::string>& args) {
     std::cout << "     registros:    http://127.0.0.1:" << server.port() << "/api/logs\n";
     std::cout << "     Ctrl+C para salir.\n";
 
-    // El "hilo de audio" de la CLI: renderiza bloques en tiempo real y
-    // deja respirar al proceso. El servidor HTTP corre en su propio hilo.
     const auto blockDuration = std::chrono::microseconds(
-        (static_cast<std::uint64_t>(kDefaultBlockSize) * 1'000'000ull) / options.sampleRate);
+        (static_cast<std::uint64_t>(kDefaultBlockSize) * 1000000ull) / options.sampleRate);
     std::vector<float> buffer(kDefaultBlockSize, 0.0f);
     float* outputs[1] = {buffer.data()};
     while (true) {
@@ -419,6 +504,18 @@ int main(int argc, char** argv) {
     }
     if (command == "demo") {
         return commandDemo(rest);
+    }
+    if (command == "wavetable") {
+        return commandWavetable(rest);
+    }
+    if (command == "enhanced") {
+        return commandEnhanced(rest);
+    }
+    if (command == "mono") {
+        return commandMono(rest);
+    }
+    if (command == "mario") {
+        return commandMario(rest);
     }
     if (command == "inspect") {
         return commandInspect(rest);

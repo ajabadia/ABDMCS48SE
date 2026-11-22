@@ -23,6 +23,13 @@
 
 namespace bdmcs48::instrument {
 
+enum class VelocityCurve {
+    Linear = 0,
+    Exponential = 1,
+    Logarithmic = 2,
+    Stepped = 3
+};
+
 struct VoiceConfig {
     // Frecuencia nativa del firmware de voz con engine_clock a 1.0. El
     // programa alterna el DAC cada 450 ciclos de maquina y anade 2 ciclos de
@@ -36,6 +43,12 @@ struct VoiceConfig {
     // Envolvente de puerta (lineal, en milisegundos).
     double attackMs = 4.0;
     double releaseMs = 80.0;
+
+    // Deslizamiento legato (portamento) en milisegundos (0 = desactivado).
+    double glideMs = 0.0;
+
+    // Perfil de respuesta a la velocidad MIDI.
+    VelocityCurve velocityCurve = VelocityCurve::Linear;
 
     // Limites del parametro engine_clock. Deben coincidir con
     // GenericMcs48Machine::kMinClockScale / kMaxClockScale.
@@ -58,6 +71,11 @@ public:
     // valor vigente es una operacion nula, para que el host pueda repetir el
     // parametro en cada bloque sin alargar la cola.
     void setReleaseMs(double milliseconds);
+    void setAttackMs(double milliseconds);
+    void setReferenceHz(double hz);
+    void setVelocitySens(float sens);
+    void setGlideMs(double milliseconds);
+    void setVelocityCurve(VelocityCurve curve);
 
     // Escala de reloj que corresponde a una nota MIDI (sin recortar), y la
     // frecuencia igualmente temperada de la nota.
@@ -70,13 +88,17 @@ public:
     // Mismo valor en el entero que espera MachineHost::postCommand.
     std::int32_t clockCommandValue() const;
 
-    // Avanza la envolvente una muestra y devuelve su ganancia (0..1).
+    // Avanza la envolvente y el glide una muestra y devuelve su ganancia (0..1).
     float nextGain();
 
     bool sounding() const { return stage_ != Stage::Idle; }
     int currentNote() const { return currentNote_; }
+    double currentPitch() const { return currentPitch_; }
+    bool isGliding() const { return isGliding_; }
     float velocity() const { return velocity_; }
     float level() const { return gain_; }
+    double glideMs() const { return config_.glideMs; }
+    VelocityCurve velocityCurve() const { return config_.velocityCurve; }
 
 private:
     enum class Stage { Idle, Attack, Hold, Release };
@@ -93,7 +115,13 @@ private:
     std::size_t heldCount_ = 0;
 
     int currentNote_ = -1;
+    double currentPitch_ = 69.0;
+    double targetPitch_ = 69.0;
+    bool isGliding_ = false;
+    double glideStepCoeff_ = 1.0;
+
     float velocity_ = 0.0f;
+    float velocitySens_ = 1.0f;
     float gain_ = 0.0f;
     float attackStep_ = 1.0f;
     float releaseStep_ = 1.0f;

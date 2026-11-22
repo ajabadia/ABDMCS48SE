@@ -1,11 +1,32 @@
-/* ABDMCS48SE WebUI - Pilot styles with ABDShared design system */
+/* ABDMCS48SE WebUI - Estilos basados en el sistema de diseno de ABDShared */
 @import '@styles/tokens.css';
+
+/* Temas Canónicos de la Suite ABDSynths (15 temas cargados desde ABDShared) */
 @import '@styles/themes/audiolab.css';
 @import '@styles/themes/audiolab-light.css';
+@import '@styles/themes/ms2000.css';
+@import '@styles/themes/ms2000-light.css';
+@import '@styles/themes/microkorg.css';
+@import '@styles/themes/advanced.css';
+@import '@styles/themes/advanced-light.css';
+@import '@styles/themes/cz101.css';
+@import '@styles/themes/cz101-light.css';
+@import '@styles/themes/deepmind.css';
+@import '@styles/themes/juno.css';
+@import '@styles/themes/neuron-dark.css';
+@import '@styles/themes/neuron-light.css';
+@import '@styles/themes/virus-snow.css';
+@import '@styles/themes/virus-snow-dark.css';
+
+/* Componentes de Diseno Canónicos de ABDShared */
 @import '@styles/components/panels.css';
 @import '@styles/components/buttons.css';
 @import '@styles/components/controls.css';
 @import '@styles/components/navbar.css';
 @import '@styles/components/widgets.css';
+@import '@styles/components/kbd-buttons.css';
+@import '@styles/components/about-dialog.css';
+@import '@styles/components/keyboard.css';
+@import '@abdsynths/midi-keyb/keyboard.css';
 
 @import './main.css';

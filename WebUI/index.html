@@ -8,80 +8,81 @@
   <script type="module" src="/src/main.js"></script>
 </head>
 <body data-theme="audiolab" class="theme-audiolab skin-audiolab chassis">
-  <!-- Barra de navegación universal ABDShared -->
-  <div id="navBarContainer"></div>
+  <div id="app">
+    <!-- Barra de Menús Superior Universal ABDShared (SynthNavBar) -->
+    <div id="navBarContainer"></div>
 
-  <main class="synth-canvas">
-    <!-- Columna Izquierda: Motor de Síntesis y Matriz de Comandos -->
-    <div class="canvas-col-left">
-      <section class="panel params" aria-labelledby="params-title">
-        <h2 id="params-title">Controles del Motor</h2>
-        <div class="param">
-          <label for="gain">Gain <output id="gain-value">-6.0 dB</output></label>
-          <input id="gain" type="range" min="-24" max="6" step="0.1" value="-6">
+    <!-- Barra de Herramientas de Presets y Control Rápido (Sub-header) -->
+    <header id="synthToolbar" class="synth-toolbar">
+      <div class="toolbar-section toolbar-presets">
+        <span class="toolbar-label" data-i18n="toolbar.presetLabel">PRESET:</span>
+        <select id="preset-list" class="preset-select-dropdown" aria-label="Presets guardados"></select>
+        <input id="preset-name" type="text" class="preset-name-input" value="Init" spellcheck="false" title="Nombre del preset" data-i18n-title="toolbar.presetNameTitle">
+        <button id="preset-save" type="button" class="btn btn-sm" title="Guardar Preset" data-i18n-title="toolbar.presetSaveTitle">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          <span data-i18n="toolbar.presetSave">Guardar</span>
+        </button>
+        <button id="preset-load" type="button" class="btn btn-sm" title="Cargar Preset" data-i18n-title="toolbar.presetLoadTitle">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 9l-5 5-5-5M12 12.8V2.5"></path></svg>
+          <span data-i18n="toolbar.presetLoad">Cargar</span>
+        </button>
+      </div>
+
+      <div class="toolbar-section toolbar-firmware">
+        <span class="toolbar-label" data-i18n="toolbar.firmwareLabel">FIRMWARE:</span>
+        <button id="toolbarFwBadge" type="button" class="toolbar-firmware-pill" title="Clic para abrir Gestor de Firmware y ROMs" data-i18n-title="toolbar.firmwareBadgeTitle">
+          <span class="toolbar-fw-led"></span>
+          <span id="toolbarFwName">MCS-48 Enhanced Mono Voice</span>
+        </button>
+      </div>
+
+      <div class="toolbar-section toolbar-quick-actions">
+        <button id="toolbarPanicBtn" type="button" class="btn btn-sm btn-panic" title="Panic: Apagar todas las notas (Ctrl+Q)" data-i18n="toolbar.panicBtn" data-i18n-title="toolbar.panicTitle">
+          PANIC
+        </button>
+        <button id="toolbarResetCpuBtn" type="button" class="btn btn-sm" title="Reiniciar CPU MCS-48" data-i18n="toolbar.resetCpuBtn" data-i18n-title="toolbar.resetCpuTitle">
+          RESET CPU
+        </button>
+      </div>
+    </header>
+
+    <!-- Escenario Principal del Sintetizador (Montado canónicamente desde ABDShared) -->
+    <main id="synthStage" class="synth-stage"></main>
+
+    <!-- Virtual Keyboard Footer (Fixed Bottom, como en ABDMS2000) -->
+    <footer class="keyboard-container" id="synth-keyboard-footer">
+      <div class="keyboard-lower-section">
+        <!-- Vertical Octave Controls -->
+        <div class="kbd-octave-controls">
+          <button id="oct-up" class="kbd-octave-btn" title="Octave Up">
+            <span>OCT +</span>
+            <div class="kbd-octave-led" id="led-up"></div>
+          </button>
+          <button id="oct-down" class="kbd-octave-btn" title="Octave Down">
+            <span>OCT -</span>
+            <div class="kbd-octave-led" id="led-down"></div>
+          </button>
         </div>
-        <div class="param">
-          <label for="release">Release <output id="release-value">80 ms</output></label>
-          <input id="release" type="range" min="10" max="500" step="1" value="80">
+
+        <!-- Keybed Performance Surface -->
+        <div id="piano-keyboard"></div>
+
+        <!-- Utility Controls (Sustain & Panic) -->
+        <div class="kbd-utility-controls">
+          <button id="sustain-btn" class="kbd-octave-btn kbd-utility-btn" title="Sustain Pedal (Ctrl+Space)">
+            <span>SUST</span>
+            <div class="kbd-octave-led kbd-sustain-led" id="led-sustain"></div>
+          </button>
+          <button id="panic-btn" class="kbd-octave-btn kbd-utility-btn" title="All Notes Off / Panic (Ctrl+Q)">
+            <span>PANIC</span>
+            <div class="kbd-octave-led kbd-panic-led" id="led-panic"></div>
+          </button>
         </div>
-        <p class="hint">Los parámetros van al APVTS del plugin: se automatizan y se guardan con el proyecto.</p>
-      </section>
-
-      <section class="panel matrix" aria-labelledby="matrix-title">
-        <h2 id="matrix-title">Matriz de comandos</h2>
-        <p class="hint">Cada fila se dispara con su Note On. La probabilidad se decide al recibir la nota; el delay y la mutación se aplican al ejecutar.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">On</th>
-                <th scope="col">Nota</th>
-                <th scope="col">Destino</th>
-                <th scope="col">Valor</th>
-                <th scope="col">Prob.</th>
-                <th scope="col">Delay</th>
-                <th scope="col">Mutación</th>
-                <th scope="col">Paso</th>
-              </tr>
-            </thead>
-            <tbody id="matrix-body"></tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-
-    <!-- Columna Derecha: Diagnóstico LCD y Medición Master -->
-    <div class="canvas-col-right">
-      <section class="panel lcd-panel" aria-labelledby="status-title">
-        <h2 id="status-title">Telemetría MCS-48</h2>
-        <div class="lcd-container">
-          <div class="lcd-grid">
-            <div class="lcd-cell"><span class="lcd-label">PC</span><span class="lcd-value" id="st-pc">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">A</span><span class="lcd-value" id="st-a">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">PSW</span><span class="lcd-value" id="st-psw">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Banco</span><span class="lcd-value" id="st-bank">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Ciclos</span><span class="lcd-value lcd-value-wide" id="st-cycles">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Nota</span><span class="lcd-value" id="st-note">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Nivel</span><span class="lcd-value" id="st-level">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Overruns</span><span class="lcd-value" id="st-overruns">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Underruns</span><span class="lcd-value" id="st-underruns">–</span></div>
-            <div class="lcd-cell"><span class="lcd-label">Comandos</span><span class="lcd-value lcd-value-wide" id="st-command">–</span></div>
-          </div>
-        </div>
-        <p class="fault" id="fault" hidden></p>
-      </section>
-
-      <section class="panel master-panel" aria-labelledby="master-title">
-        <h2 id="master-title">Master</h2>
-        <div id="vuMeterMaster" class="vumeter-tower"></div>
-      </section>
-    </div>
-  </main>
-
-  <!-- VirtualKeyboardDrawer - Teclado de piano virtual desplegable -->
-  <div id="virtualKeyboardDrawerMount">
-    <div id="piano-keyboard"></div>
+      </div>
+    </footer>
   </div>
 
+  <!-- Punto de Montaje del Drawer Lateral para Firmware & ROMs (montado en body fuera de #app) -->
+  <div id="firmwareDrawerMount"></div>
 </body>
 </html>

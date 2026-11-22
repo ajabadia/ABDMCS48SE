@@ -6,6 +6,13 @@
 
 #include "webui/WebUIResources.h"
 
+#if JUCE_WINDOWS
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace bdmcs48::plugin {
 namespace {
 
@@ -14,16 +21,27 @@ namespace {
 // murio a lo bruto: su msedgewebview2.exe sigue vivo, bloquea EBWebView y el
 // renderer nuevo no arranca. El sello se toma del propio ejecutable, asi que
 // cambia con cada build sin exigir una definicion de CMake por compilacion.
+// Carpeta de datos de WebView2 aislada por proceso (PID) conforme a ADR-003.
+// Reusar una sola carpeta (o %TEMP%) es lo que deja la ventana en blanco cuando
+// una instancia anterior murio a lo bruto o dos instancias corren a la vez:
+// msedgewebview2.exe bloquea EBWebView y el renderer nuevo no arranca.
+// Respeta la variable de entorno WEBVIEW2_USER_DATA_FOLDER si esta definida.
 juce::File webView2UserDataFolder() {
-    const auto executable = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-    const auto base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                          .getChildFile("ABDMCS48SE")
-                          .getChildFile("WebView2");
-    const auto current = base.getChildFile(
-        juce::String(executable.getLastModificationTime().toMilliseconds()));
+#if JUCE_WINDOWS
+    const auto pid = static_cast<juce::int64>(::GetCurrentProcessId());
+#else
+    const auto pid = static_cast<juce::int64>(juce::Time::getMillisecondCounter());
+#endif
 
-    // Limpieza best-effort de builds anteriores; si alguna sigue bloqueada se
-    // ignora y el arranque continua con la carpeta nueva.
+    const juce::String envFolder = juce::SystemStats::getEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", "").trim();
+    const juce::File base = envFolder.isNotEmpty()
+                                ? juce::File(envFolder)
+                                : juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                      .getChildFile("ABDMCS48SE")
+                                      .getChildFile("WebView2");
+
+    const juce::File current = base.getChildFile(juce::String(pid));
+
     if (base.isDirectory()) {
         for (const auto& entry :
              juce::RangedDirectoryIterator(base, false, "*", juce::File::findDirectories)) {
@@ -87,8 +105,11 @@ juce::WebBrowserComponent::Options withResourceProvider(
 } // namespace
 
 juce::StringArray InstrumentEditor::nativeFunctionNames() {
-    return {"getState", "listPresets", "noteOn", "noteOff", "allNotesOff",
-            "setParameter", "setRow", "resetMachine", "savePreset", "loadPreset"};
+    return {"getState", "listPresets", "listFirmwares", "setDiagnosticTone", "noteOn", "noteOff", "allNotesOff",
+            "setParameter", "beginParameterGesture", "endParameterGesture", "setRow", "resetMachine", "savePreset",
+            "loadPreset", "loadFirmware", "getWorkspaceFolder", "setWorkspaceFolder", "browseWorkspaceFolder",
+            "listRomFiles", "pickRomFile", "convertRomToPackage", "loadFactoryPreset", "loadRawRomData",
+            "exportSysExDump", "importSysExDump"};
 }
 
 juce::WebBrowserComponent::Options InstrumentEditor::makeOptions(InstrumentEditor& editor) {
@@ -164,6 +185,8 @@ void InstrumentEditor::handleNative(const juce::String& name,
         done(bridge_.stateJson());
     } else if (name == "listPresets") {
         done(bridge_.presetsJson());
+    } else if (name == "listFirmwares") {
+        done(bridge_.firmwaresJson());
     } else if (name == "noteOn") {
         done(bridge_.noteOn(intArg(0), floatArg(1)));
     } else if (name == "noteOff") {
@@ -172,6 +195,10 @@ void InstrumentEditor::handleNative(const juce::String& name,
         done(bridge_.allNotesOff());
     } else if (name == "setParameter") {
         done(bridge_.setParameter(stringArg(0), floatArg(1)));
+    } else if (name == "beginParameterGesture") {
+        done(bridge_.beginParameterGesture(stringArg(0)));
+    } else if (name == "endParameterGesture") {
+        done(bridge_.endParameterGesture(stringArg(0)));
     } else if (name == "setRow") {
         done(bridge_.applyRowJson(intArg(0), stringArg(1)));
     } else if (name == "resetMachine") {
@@ -180,6 +207,34 @@ void InstrumentEditor::handleNative(const juce::String& name,
         done(bridge_.savePreset(stringArg(0)));
     } else if (name == "loadPreset") {
         done(bridge_.loadPreset(stringArg(0)));
+    } else if (name == "loadFirmware") {
+        done(bridge_.loadFirmware(stringArg(0)));
+    } else if (name == "setDiagnosticTone") {
+        done(bridge_.setDiagnosticTone(args.size() > 0 ? static_cast<bool>(args[0]) : false));
+    } else if (name == "getWorkspaceFolder") {
+        done(bridge_.getWorkspaceFolder());
+    } else if (name == "setWorkspaceFolder") {
+        done(bridge_.setWorkspaceFolder(stringArg(0)));
+    } else if (name == "browseWorkspaceFolder") {
+        bridge_.browseWorkspaceFolder([done = std::move(done)](juce::String result) mutable {
+            done(std::move(result));
+        });
+    } else if (name == "listRomFiles") {
+        done(bridge_.listRomFiles());
+    } else if (name == "pickRomFile") {
+        bridge_.pickRomFile([done = std::move(done)](juce::String result) mutable {
+            done(std::move(result));
+        });
+    } else if (name == "convertRomToPackage") {
+        done(bridge_.convertRomToPackage(stringArg(0)));
+    } else if (name == "loadFactoryPreset") {
+        done(bridge_.loadFactoryPreset(intArg(0)));
+    } else if (name == "loadRawRomData") {
+        done(bridge_.loadRawRomData(stringArg(0), stringArg(1)));
+    } else if (name == "exportSysExDump") {
+        done(bridge_.exportSysExDump());
+    } else if (name == "importSysExDump") {
+        done(bridge_.importSysExDump(stringArg(0)));
     } else {
         done("funcion desconocida: " + name);
     }

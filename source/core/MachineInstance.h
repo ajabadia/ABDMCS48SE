@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
 namespace bdmcs48::core {
 
 struct EngineStatus {
+    static constexpr std::size_t kFaultMessageCapacity = 48;
+
     std::uint64_t framesRendered = 0;
     std::uint64_t cpuCycles = 0;
     std::uint16_t programCounter = 0;
@@ -26,7 +29,11 @@ struct EngineStatus {
     std::uint8_t psw = 0;
     std::uint8_t bank = 0;        // flip-flop A11 del MCS-48
     std::uint8_t faulted = 0;
-    std::string faultMessage;
+    float outputLevel = 0.0f;
+    float peakLevel = 0.0f;
+    float rmsLevel = 0.0f;
+    std::int8_t waveform[8] = {0};
+    char faultMessage[kFaultMessageCapacity] = {0};
 };
 
 class MachineInstance {

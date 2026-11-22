@@ -41,7 +41,11 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: {
+      '@abdsynths/shared/i18n': path.join(sharedRoot, 'Components', 'i18n.js'),
       '@abdsynths/shared/styles': path.join(sharedRoot, 'Assets', 'styles'),
+      '@abdsynths/shared/components/synth-engines': path.join(sharedRoot, 'Components', 'SynthEngines', 'index.js'),
+      '@abdsynths/shared/components/fx-faceplates': path.join(sharedRoot, 'Components', 'FxFaceplates', 'index.js'),
+      '@abdsynths/shared/components/wheel.js': path.join(sharedRoot, 'Components', 'wheel.js'),
       '@abdsynths/shared/components': path.join(sharedRoot, 'Components'),
       '@abdsynths/shared/Components': path.join(sharedRoot, 'Components'),
       '@abdsynths/shared': sharedRoot,
@@ -50,8 +54,11 @@ export default defineConfig({
       '@styles': path.join(sharedRoot, 'Assets', 'styles'),
       '@abdsynths/midi-keyb/keyboard.css': path.join(sharedRoot, 'Code', 'MidiKeyboard', 'src', 'keyboard.css'),
       '@abdsynths/midi-keyb': keyboardSource,
-      '@abdsynths/shared/components/wheel.js': path.join(sharedRoot, 'Components', 'wheel.js'),
     },
+  },
+  server: {
+    port: 8048,
+    strictPort: true,
   },
   build: {
     outDir: 'dist',

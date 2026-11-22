@@ -123,3 +123,112 @@ jobs:
           grep -q 'id="piano-keyboard"' WebUI/dist/index.html
           grep -q 'kbd-keys-wrapper' WebUI/dist/assets/index.css
           grep -q 'assets/index.js' WebUI/dist/index.html
+
+      - name: Upload WebUI bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: webui-dist
+          path: WebUI/dist/
+          retention-days: 7
+
+  plugin-juce:
+    name: Plugin JUCE / Windows
+    runs-on: windows-latest
+    needs: [webui]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download WebUI bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: WebUI/dist
+
+      - name: Configure CMake with JUCE Plugin
+        shell: bash
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DABDMCS48SE_BUILD_PLUGIN=ON \
+            -DABDMCS48SE_BUILD_TESTS=ON \
+            -DABDMCS48SE_BUILD_BENCHMARKS=OFF
+
+      - name: Build JUCE Plugin and Smoke Test
+        shell: bash
+        run: cmake --build build --config Release --target bdmcs48se_instrument bdmcs48se_plugin_smoke --parallel
+
+      - name: Run Plugin Smoke Test
+        shell: bash
+        run: ctest --test-dir build -C Release -R plugin_smoke --output-on-failure --timeout 120
+
+      - name: Upload Plugin Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdmcs48se-plugin-windows-x64
+          path: |
+            build/bdmcs48se_instrument_artefacts/Release/VST3/
+            build/bdmcs48se_instrument_artefacts/Release/Standalone/
+          if-no-files-found: warn
+
+  sanitizers-asan-ubsan:
+    name: Linux / ASan + UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake with ASan + UBSan
+        shell: bash
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DABDMCS48SE_BUILD_TESTS=ON \
+            -DABDMCS48SE_BUILD_BENCHMARKS=OFF
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --parallel
+
+      - name: Test under ASan and UBSan
+        shell: bash
+        env:
+          ASAN_OPTIONS: "detect_leaks=1:check_initialization_order=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+  sanitizers-tsan:
+    name: Linux / TSan (ThreadSanitizer)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake with ThreadSanitizer
+        shell: bash
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DABDMCS48SE_BUILD_TESTS=ON \
+            -DABDMCS48SE_BUILD_BENCHMARKS=OFF
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --parallel
+
+      - name: Test under ThreadSanitizer
+        shell: bash
+        env:
+          TSAN_OPTIONS: "halt_on_error=1:abort_on_error=1"
+        run: ctest --test-dir build --output-on-failure --timeout 180
+
