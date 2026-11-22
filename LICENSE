@@ -1,0 +1,21 @@
+BDMCS48SE License
+================
+
+This software is distributed under the GNU General Public License version 3 (GPLv3)
+or later, in compliance with the JUCE Framework Community terms.
+
+Modular Subcomponents Licensing:
+--------------------------------
+1. Headless MCS-48 Core & Sound Engines (source/core/, source/machines/, source/host/):
+   Licensed under the BSD 3-Clause License. Clean-room implementation created from
+   hardware specifications and documentation.
+
+2. Web User Interface (WebUI/):
+   Licensed under the MIT License.
+
+3. Demonstration Firmwares:
+   Custom sound synthesis firmwares written specifically for this project are
+   licensed under the BSD 3-Clause License.
+
+Full license terms for the GNU General Public License v3 are available at:
+https://www.gnu.org/licenses/gpl-3.0.html
