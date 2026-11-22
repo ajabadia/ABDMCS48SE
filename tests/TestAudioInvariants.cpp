@@ -134,6 +134,15 @@ bool corruptImage(const fs::path& root, const std::string& imageId, std::string&
 
 } // namespace
 
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__) || defined(BDMCS48_NO_GLOBAL_NEW_OVERRIDE)
+#define BDMCS48_SANITIZER_ACTIVE 1
+#elif defined(__has_feature)
+  #if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(memory_sanitizer)
+    #define BDMCS48_SANITIZER_ACTIVE 1
+  #endif
+#endif
+
+#if !defined(BDMCS48_SANITIZER_ACTIVE)
 void* operator new(std::size_t size) {
     if (gCountAllocations.load(std::memory_order_relaxed)) {
         gAllocationCount.fetch_add(1, std::memory_order_relaxed);
@@ -164,6 +173,7 @@ void operator delete(void* pointer, std::size_t) noexcept {
 void operator delete[](void* pointer, std::size_t) noexcept {
     std::free(pointer);
 }
+#endif
 
 // --- Colas y colectores ---------------------------------------------------
 

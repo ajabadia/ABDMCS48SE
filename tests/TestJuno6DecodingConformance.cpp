@@ -243,6 +243,7 @@ TEST(Juno6Conformidad, AuditoriaOpcodeNamesSinArtefactos8051) {
     CHECK_EQ(illegalCount, 26);
     // 256 - 26 ilegales - 7 interrupciones hardware no soportadas = 223 implementados
     CHECK_EQ(implementedCount, 223);
+    CHECK(twoBytesCount > 0);
 
     // Los 10 opcodes clave de la conformidad Juno-6 comprobados en la tabla
     CHECK_EQ(OpcodeTable::nameOf(0x27), std::string("clr  a"));
