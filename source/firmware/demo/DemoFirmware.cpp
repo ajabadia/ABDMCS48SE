@@ -71,7 +71,7 @@ constexpr std::uint32_t kBank0Size = 0x0b; // hasta 0x00A
 constexpr std::uint32_t kBank0SecondOffset = 0x20;
 constexpr std::uint32_t kBank0SecondSize = 0x08; // hasta 0x027
 constexpr std::uint32_t kBank1Offset = 0x00;
-constexpr std::uint32_t kBank1Size = 0x06; // hasta 0x005
+constexpr std::uint32_t kBank1Size = sizeof(kBank1Code);
 
 std::vector<std::uint8_t> makeBank0Image() {
     std::vector<std::uint8_t> data(kBank0SecondOffset + kBank0SecondSize, 0x00);
